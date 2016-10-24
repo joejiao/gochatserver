@@ -116,6 +116,7 @@ func (self *Room) writeToRingBuffer(msgData string) {
     rb.put(msgData)
 }
 
+/*
 func (self *Room) broadcast(msgData string) {
     //timeout := time.Second * 2
     //tw := time.NewTimer(timeout)
@@ -147,6 +148,7 @@ func (self *Room) broadcast(msgData string) {
     }
     self.RUnlock()
 }
+*/
 
 func (self *Room) quit() {
     defer func() {

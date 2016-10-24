@@ -46,7 +46,9 @@ func (self *ChatServer) reportStatus() {
     for _ = range ticker.C {
         self.RLock()
         for _, room := range self.rooms {
-            log.Printf("Status: %s:%d\n", room.name, len(room.clients))
+            rb := room.ringBuffer
+            pos := rb.producerSequence.get()
+            log.Printf("Status: %s: online %d, pos %d\n", room.name, len(room.clients), pos)
         }
         self.RUnlock()
     }

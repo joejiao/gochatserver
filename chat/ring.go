@@ -3,6 +3,7 @@ package chat
 import (
 	"fmt"
 	"sync/atomic"
+    "log"
 )
 
 const (
@@ -72,9 +73,9 @@ func NewConsumer(rb *RingBuffer) *Consumer {
 	return c
 }
 
-func (this *Consumer) len() int64 {
-    l := this.ringBuffer.producerSequence.get() - this.sequence.get()
-    size := this.ringBuffer.size
+func (self *Consumer) len() int64 {
+    l := self.ringBuffer.producerSequence.get() - self.sequence.get()
+    size := self.ringBuffer.size
 
     if l > size {
         l = size
@@ -87,31 +88,63 @@ func (this *Consumer) len() int64 {
     return l
 }
 
-func (this *Consumer) get() (interface{}, error) {
-    consumerPos := this.sequence.get()
+func (self *Consumer) prepareGet() (int64, int64, error) {
+    consumerPos := self.sequence.get()
 
     // producerPos 为目前最大写入的pos值
-    producerPos := this.ringBuffer.producerSequence.get()
-    minConsumerPos := producerPos - this.ringBuffer.size + 1
+    producerPos := self.ringBuffer.producerSequence.get()
+    minConsumerPos := producerPos - self.ringBuffer.size + 1
     //fmt.Println(producerPos, consumerPos, minConsumerPos)
 
     // 要取的pos还没写到
     if consumerPos >= producerPos {
-        return nil, fmt.Errorf("no new data, pos: %d", consumerPos)
+        return -2, -2, fmt.Errorf("no new data, pos: %d", consumerPos)
         //continue
     }
 
     // 如果要取的值已经被覆盖，取最小的有效数据
     if consumerPos < minConsumerPos {
-        this.sequence.set(minConsumerPos - 1)
+        log.Println("data was override, pos:", consumerPos)
+        self.sequence.set(minConsumerPos - 1)
         consumerPos = minConsumerPos - 1
         //return "", fmt.Errorf("consumerPos too old %d %d %d", producerPos, consumerPos, minConsumerPos)
     }
 
+    return consumerPos, producerPos, nil
+}
+
+func (self *Consumer) get() (interface{}, error) {
+    consumerPos, _, err := self.prepareGet()
+    if err != nil {
+        log.Println(err)
+        return nil, err
+    }
+
     nextPos := consumerPos + 1
-    item := this.ringBuffer.buffer[nextPos&this.ringBuffer.mask]
-    this.sequence.add(1)
+
+    item := self.ringBuffer.buffer[nextPos&self.ringBuffer.mask]
+    self.sequence.add(1)
     return item, nil
+}
+
+func (self *Consumer) batchGet() ([]interface{}, error) {
+    consumerPos, producerPos, err := self.prepareGet()
+    if err != nil {
+        return nil, err
+    }
+
+    nextPos := consumerPos + 1
+
+    batch := producerPos - consumerPos
+    items := make([]interface{}, batch)
+
+    for i := int64(0); i < batch; i++ {
+        items[i] = self.ringBuffer.buffer[nextPos&self.ringBuffer.mask]
+        nextPos++
+    }
+
+    self.sequence.add(batch)
+    return items, nil
 }
 
 /*
@@ -119,7 +152,7 @@ func main() {
     var size int64 = 512
     rb := NewRingBuffer(size)
 
-    for i := int64(0); i < size + 13; i++ {
+    for i := int64(0); i < size + 39; i++ {
 		str := strconv.Itoa(int(i))
 		//fmt.Println(str)
 		rb.put(str)
@@ -127,15 +160,12 @@ func main() {
 
 	fmt.Printf("%+v\n", rb.buffer)
 	c1 := NewConsumer(rb)
-	for i := int64(0); i < size + 10; i++ {
+	for i := int64(0); i < size; i++ {
 		str, err := c1.get()
 		fmt.Println(i, str, err)
 	}
-
     c2 := NewConsumer(rb)
-    for i := int64(0); i < size; i++ {
-        str, _ := c2.get()
-        fmt.Println(i, str)
-    }
+    str, _ := c2.batchGet()
+    fmt.Printf("%+v\n", str)
 }
 */

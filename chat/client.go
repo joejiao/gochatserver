@@ -23,7 +23,7 @@ type Client struct {
     rooms       map[string]*Room
     roomName    string
     incoming    chan *Message
-    outgoing    chan string
+    //outgoing    chan string
     quiting     chan struct{}
     reader      *bufio.Reader
     writer      *bufio.Writer
@@ -37,7 +37,7 @@ func NewClient(conn *net.TCPConn, server *ChatServer) *Client {
             rooms:    make(map[string]*Room),
             roomName: "",
             incoming: make(chan *Message),
-            outgoing: make(chan string, 1000),
+            //outgoing: make(chan string, 1000),
             quiting:  make(chan struct{}),
             reader:   bufio.NewReaderSize(conn, 1024),
             writer:   bufio.NewWriter(conn),
@@ -107,7 +107,6 @@ func (self *Client) join() {
 
 func (self *Client) read() {
     defer func() {
-        close(self.quiting)
 
         // recover from panic caused by writing to a closed channel
         if r := recover(); r != nil {
@@ -127,7 +126,7 @@ func (self *Client) read() {
                 log.Printf("ReadString error: %s\n", err)
             }
             //msg = &Message{cmd: "QUIT", data: "", receiver: receiver}
-            //self.quiting <- struct{}
+            self.quiting <- struct{}{}
             return
         }
         line = strings.TrimRight(line, "\n")
@@ -137,6 +136,7 @@ func (self *Client) read() {
         //runtime.Gosched()
     }
 }
+
 func (self *Client) writeFromRingBuffer() {
     self.lock.RLock()
     room := self.rooms[self.roomName]
@@ -162,29 +162,24 @@ func (self *Client) writeFromRingBuffer() {
 
             l := consumer.len()
             if l == 0 {
-                //self.writer.Flush()
                 time.Sleep(time.Second * 1)
                 continue
             }
 
-            i := 0
-            for n := l; n > 0; n-- {
-                msgData, _ := consumer.get()
-                if msgData != nil {
-                    isClosed = self.writeMsg(msgData.(string))
-                    i++
-                }
-                if i > 10 {
-                    self.writer.Flush()
-                    i = 0
-                }
+            items, err := consumer.batchGet()
+            if err != nil {
+                log.Println("consumer.batchGet:", err)
+                continue
             }
-
+            for _, v := range items {
+                isClosed = self.writeMsg(v.(string))
+            }
             self.writer.Flush()
         }
     }
 }
 
+/*
 func (self *Client) write() {
     //ticker := time.NewTicker(time.Second * 1)       //定时Flush,减少系统调用
     //ticker := time.NewTimer(time.Second * 1)
@@ -220,6 +215,8 @@ func (self *Client) write() {
         self.writer.Flush()
     }
 }
+*/
+
 func (self *Client) writeMsg(msgData string) bool {
     msgData = msgData + "\n"
     //data := msg.data
@@ -297,8 +294,8 @@ func (self *Client) quit() {
         room.quiting <- self.conn
     }
 
+    //close(self.outgoing)
     close(self.quiting)
-    close(self.outgoing)
     close(self.incoming)
 
     log.Println("close client channel: incoming, outgoing, quiting:", self.conn.RemoteAddr().String())
