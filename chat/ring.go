@@ -1,8 +1,7 @@
-package chat 
+package chat
 
 import (
 	"fmt"
-	"strconv"
 	"sync/atomic"
 )
 
@@ -71,6 +70,21 @@ func NewConsumer(rb *RingBuffer) *Consumer {
 	c := &Consumer{sequence: NewSequence(), ringBuffer: rb}
 	//c.sequence.set(0)
 	return c
+}
+
+func (this *Consumer) len() int64 {
+    l := this.ringBuffer.producerSequence.get() - this.sequence.get()
+    size := this.ringBuffer.size
+
+    if l > size {
+        l = size
+    }
+
+    if l < 0 {
+        l = 0
+    }
+
+    return l
 }
 
 func (this *Consumer) get() (interface{}, error) {

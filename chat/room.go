@@ -8,8 +8,9 @@ import (
     "github.com/nats-io/nats"
 )
 
-var (
+const (
     serverAddr = "nats://10.1.64.2:4222"
+    ringBufferMaxSize = 512
 )
 
 type Room struct {
@@ -21,6 +22,7 @@ type Room struct {
     quiting     chan *net.TCPConn
     nsqSendChan chan string
     nsqRecvChan chan string
+    ringBuffer  *RingBuffer
 }
 
 func NewRoom(name string) *Room {
@@ -32,6 +34,7 @@ func NewRoom(name string) *Room {
         outgoing:   make(chan string),
         nsqSendChan: make(chan string),
         nsqRecvChan: make(chan string),
+        ringBuffer: NewRingBuffer(ringBufferMaxSize),
     }
     return room
 }
@@ -48,7 +51,8 @@ func (self *Room) listen() {
                 return
             }
             //log.Printf("Received on [%s]: '%s'\n", m.Subject, string(m.Data))
-            self.broadcast(msgData)
+            //self.broadcast(msgData)
+            self.writeToRingBuffer(msgData)
         case conn, ok := <-self.quiting:
             if !ok {
                 return
@@ -107,6 +111,11 @@ func (self *Room) readFromNATS() {
     }
 }
 
+func (self *Room) writeToRingBuffer(msgData string) {
+    rb := self.ringBuffer
+    rb.put(msgData)
+}
+
 func (self *Room) broadcast(msgData string) {
     //timeout := time.Second * 2
     //tw := time.NewTimer(timeout)
@@ -117,16 +126,6 @@ func (self *Room) broadcast(msgData string) {
         }
         //tw.Stop()
     }()
-
-    /*
-    // 复制到新的map防止lock冲突 
-    newMap := make(map[*net.TCPConn]*Client)
-    self.RLock()
-    for k, v := range self.clients {
-        newMap[k] = v
-    }
-    self.RUnlock()
-    */
 
     self.RLock()
     for _, client := range self.clients {

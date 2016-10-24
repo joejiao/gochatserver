@@ -24,7 +24,7 @@ type Client struct {
     roomName    string
     incoming    chan *Message
     outgoing    chan string
-    quiting     chan *net.TCPConn
+    quiting     chan struct{}
     reader      *bufio.Reader
     writer      *bufio.Writer
 }
@@ -38,7 +38,7 @@ func NewClient(conn *net.TCPConn, server *ChatServer) *Client {
             roomName: "",
             incoming: make(chan *Message),
             outgoing: make(chan string, 1000),
-            quiting:  make(chan *net.TCPConn),
+            quiting:  make(chan struct{}),
             reader:   bufio.NewReaderSize(conn, 1024),
             writer:   bufio.NewWriter(conn),
         }
@@ -63,7 +63,8 @@ func (self *Client) handler() {
 
     go self.listen()
     go self.read()
-    go self.write()
+    //go self.write()
+    go self.writeFromRingBuffer()
 }
 
 func (self *Client) listen() {
@@ -106,6 +107,8 @@ func (self *Client) join() {
 
 func (self *Client) read() {
     defer func() {
+        close(self.quiting)
+
         // recover from panic caused by writing to a closed channel
         if r := recover(); r != nil {
             log.Printf("runtime panic client.read: %v\n", r)
@@ -124,7 +127,7 @@ func (self *Client) read() {
                 log.Printf("ReadString error: %s\n", err)
             }
             //msg = &Message{cmd: "QUIT", data: "", receiver: receiver}
-            self.quiting <- self.conn
+            //self.quiting <- struct{}
             return
         }
         line = strings.TrimRight(line, "\n")
@@ -132,6 +135,53 @@ func (self *Client) read() {
         msg := &Message{data: line, receiver: self.roomName}
         self.incoming <- msg
         //runtime.Gosched()
+    }
+}
+func (self *Client) writeFromRingBuffer() {
+    self.lock.RLock()
+    room := self.rooms[self.roomName]
+    self.lock.RUnlock()
+
+    rb := room.ringBuffer
+    pos := rb.producerSequence.get()
+
+    consumer := NewConsumer(rb)
+    consumer.sequence.set(pos)
+
+    isClosed := false
+    for {
+        select {
+        case <-self.quiting:
+            return
+
+        default:
+            if isClosed {
+                //log.Println("client.writeMsg isClosed")
+                return
+            }
+
+            l := consumer.len()
+            if l == 0 {
+                //self.writer.Flush()
+                time.Sleep(time.Second * 1)
+                continue
+            }
+
+            i := 0
+            for n := l; n > 0; n-- {
+                msgData, _ := consumer.get()
+                if msgData != nil {
+                    isClosed = self.writeMsg(msgData.(string))
+                    i++
+                }
+                if i > 10 {
+                    self.writer.Flush()
+                    i = 0
+                }
+            }
+
+            self.writer.Flush()
+        }
     }
 }
 
