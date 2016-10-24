@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"sync/atomic"
+    "log"
+    "strconv"
 )
 
 const (
@@ -73,7 +74,22 @@ func NewConsumer(rb *RingBuffer) *Consumer {
 	return c
 }
 
-func (this *Consumer) get() (interface{}, error) {
+func (this *Consumer) len() int64 {
+    l := this.ringBuffer.producerSequence.get() - this.sequence.get()
+    size := this.ringBuffer.size
+
+    if l > size {
+        l = size
+    }
+
+    if l < 0 {
+        l = 0
+    }
+
+    return l
+}
+
+func (this *Consumer) prepareGet() (int64, int64, error) {
     consumerPos := this.sequence.get()
 
     // producerPos 为目前最大写入的pos值
@@ -83,28 +99,63 @@ func (this *Consumer) get() (interface{}, error) {
 
     // 要取的pos还没写到
     if consumerPos >= producerPos {
-        return nil, fmt.Errorf("no new data, pos: %d", consumerPos)
+        return -2, -2, fmt.Errorf("no new data, pos: %d", consumerPos)
         //continue
     }
 
     // 如果要取的值已经被覆盖，取最小的有效数据
     if consumerPos < minConsumerPos {
+        log.Println("data was override, pos:", consumerPos)
         this.sequence.set(minConsumerPos - 1)
         consumerPos = minConsumerPos - 1
         //return "", fmt.Errorf("consumerPos too old %d %d %d", producerPos, consumerPos, minConsumerPos)
     }
 
+    return consumerPos, producerPos, nil
+}
+
+func (this *Consumer) get() (interface{}, error) {
+    consumerPos, _, err := this.prepareGet()
+    if err != nil {
+        log.Println(err)
+        return nil, err
+    }
+
     nextPos := consumerPos + 1
+
     item := this.ringBuffer.buffer[nextPos&this.ringBuffer.mask]
     this.sequence.add(1)
     return item, nil
+}
+
+func (this *Consumer) batchGet() ([]interface{}, error) {
+    consumerPos, producerPos, err := this.prepareGet()
+    if err != nil {
+        log.Println(err)
+        return nil, err
+    }
+
+    nextPos := consumerPos + 1
+
+    batch := producerPos - consumerPos
+    items := make([]interface{}, batch)
+
+    for i := int64(0); i < batch; i++ {
+        items[i] = this.ringBuffer.buffer[nextPos&this.ringBuffer.mask]
+        nextPos++
+    }
+
+    log.Println("batch copy:", producerPos, consumerPos, batch)
+
+    this.sequence.add(batch)
+    return items, nil
 }
 
 func main() {
     var size int64 = 512
     rb := NewRingBuffer(size)
 
-    for i := int64(0); i < size + 13; i++ {
+    for i := int64(0); i < size + 39; i++ {
 		str := strconv.Itoa(int(i))
 		//fmt.Println(str)
 		rb.put(str)
@@ -112,15 +163,11 @@ func main() {
 
 	fmt.Printf("%+v\n", rb.buffer)
 	c1 := NewConsumer(rb)
-	for i := int64(0); i < size + 10; i++ {
+	for i := int64(0); i < size; i++ {
 		str, err := c1.get()
 		fmt.Println(i, str, err)
 	}
-	/*
-		c2 := NewConsumer(rb)
-		for i := int64(0); i < size; i++ {
-			str, _ := c2.get()
-			fmt.Println(i, str)
-		}
-	*/
+    c2 := NewConsumer(rb)
+    str, _ := c2.batchGet()
+    fmt.Printf("%+v\n", str)
 }
