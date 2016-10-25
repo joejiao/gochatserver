@@ -116,7 +116,6 @@ func (self *Consumer) prepareGet() (int64, int64, error) {
 func (self *Consumer) get() (interface{}, error) {
     consumerPos, _, err := self.prepareGet()
     if err != nil {
-        log.Println(err)
         return nil, err
     }
 
