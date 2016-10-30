@@ -15,25 +15,21 @@ const (
 
 type Room struct {
     sync.RWMutex
-    clients     map[*net.TCPConn]*Client
     name        string
+    clients     map[net.Conn]*Client
     incoming    chan *Message
-    outgoing    chan string
-    quiting     chan *net.TCPConn
-    nsqSendChan chan string
-    nsqRecvChan chan string
+    outgoing    chan *Message
+    quiting     chan struct{}
     ringBuffer  *RingBuffer
 }
 
 func NewRoom(name string) *Room {
     room := &Room{
         name:       name,
-        clients:    make(map[*net.TCPConn]*Client),
+        clients:    make(map[net.Conn]*Client),
         incoming:   make(chan *Message),
-        quiting:    make(chan *net.TCPConn),
-        outgoing:   make(chan string),
-        nsqSendChan: make(chan string),
-        nsqRecvChan: make(chan string),
+        outgoing:   make(chan *Message, 1000),
+        quiting:  make(chan struct{}),
         ringBuffer: NewRingBuffer(ringBufferMaxSize),
     }
     return room
@@ -44,31 +40,20 @@ func (self *Room) listen() {
     go self.writeToNATS()
     go self.readFromNATS()
 
-    for {
-        select {
-        case msgData, ok := <-self.outgoing:
-            if !ok {
-                return
-            }
-            //log.Printf("Received on [%s]: '%s'\n", m.Subject, string(m.Data))
-            //self.broadcast(msgData)
-            self.writeToRingBuffer(msgData)
-        case conn, ok := <-self.quiting:
-            if !ok {
-                return
-            }
-            self.delClient(conn)
-        }
+    for msg := range self.outgoing {
+        //log.Printf("Received on [%s]: '%s'\n", m.Subject, string(m.Data))
+        //self.broadcast(msgData)
+        self.writeToRingBuffer(msg)
         //runtime.Gosched()
     }
 }
 
-func (self *Room) addClient(conn *net.TCPConn, client *Client) {
+func (self *Room) addClient(conn net.Conn, client *Client) {
     self.Lock()
     self.clients[conn] = client
     self.Unlock()
 }
-func (self *Room) delClient(conn *net.TCPConn) {
+func (self *Room) delClient(conn net.Conn) {
     self.Lock()
     delete(self.clients, conn)
     self.Unlock()
@@ -89,10 +74,8 @@ func (self *Room) writeToNATS() {
     }
     defer ec.Close()
 
-    ec.BindSendChan(self.name, self.nsqSendChan)
-
     for msg := range self.incoming {
-        self.nsqSendChan <- msg.data
+        ec.Publish(self.name, msg)
     }
 }
 
@@ -100,20 +83,21 @@ func (self *Room) readFromNATS() {
     nc, _ := nats.Connect(serverAddr)
     ec, err := nats.NewEncodedConn(nc, "json")
     if err != nil {
-        log.Fatalf("Can't connect: %v\n", err)
+        log.Fatalf("nat.NewEncodedConn error: %v\n", err)
     }
     defer ec.Close()
 
-    ec.BindRecvChan(self.name, self.nsqRecvChan)
+    // 订阅主题, 当收到subject时候执行后面的func函数
+    ec.Subscribe(self.name, func(msg *Message) {
+        self.outgoing <- msg
+    })
 
-    for msgData := range self.nsqRecvChan {
-       self.outgoing <- msgData
-    }
+    <-self.quiting
 }
 
-func (self *Room) writeToRingBuffer(msgData string) {
+func (self *Room) writeToRingBuffer(msg *Message) {
     rb := self.ringBuffer
-    rb.put(msgData)
+    rb.put(msg.data)
 }
 
 /*
@@ -158,11 +142,8 @@ func (self *Room) quit() {
     }()
 
     log.Printf("close room %s:%d\n", self.name, len(self.clients))
-    close(self.quiting)
     close(self.incoming)
     close(self.outgoing)
-    //close(self.closeNSQ)
-    close(self.nsqRecvChan)
-    close(self.nsqSendChan)
+    close(self.quiting)
     //self = nil
 }

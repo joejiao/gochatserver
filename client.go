@@ -1,6 +1,7 @@
 package main
 
 import (
+    "crypto/tls"
 	"flag"
 	"log"
 	"net"
@@ -56,12 +57,15 @@ func main() {
 }
 
 func connection(ch chan int, i int) {
-	serverAddr, err := net.ResolveTCPAddr("tcp4", *hostAndPort)
-	conn, err := net.DialTCP("tcp4", nil, serverAddr)
-	if err != nil {
-		log.Println("conn server error:", err)
-		return
-	}
+    conf := &tls.Config{
+        InsecureSkipVerify: true,
+    }
+
+	conn, err := tls.Dial("tcp", *hostAndPort, conf)
+    if err != nil {
+        log.Fatal(err)
+    }
+
 	defer func() {
         log.Println("disconnect:", conn.LocalAddr().String())
         <-ch
@@ -92,7 +96,7 @@ func connection(ch chan int, i int) {
     readMsg(conn)
 }
 
-func readMsg(conn *net.TCPConn) {
+func readMsg(conn net.Conn) {
     defer conn.Close()
     io.Copy(ioutil.Discard, conn)
 
@@ -109,12 +113,12 @@ func readMsg(conn *net.TCPConn) {
     */
 }
 
-func sendMsg(conn *net.TCPConn, roomName string, msg string) {
+func sendMsg(conn net.Conn, roomName string, msg string) {
     defer conn.Close()
 
     i := 1
     for _ = range tt {
-        if i >= 100 {
+        if i > 100 {
             return
         }
 

@@ -10,6 +10,7 @@ import (
 
 var (
     nsqdServer = "10.1.64.2:4150"
+    exitChan = make(chan struct{})
 )
 
 func main() {
@@ -20,6 +21,7 @@ func main() {
 // 生产者
 func startProducer() {
     cfg := nsq.NewConfig()
+    cfg.MaxInFlight = 8
 
     producer, err := nsq.NewProducer(nsqdServer, cfg)
     if err != nil {
@@ -42,6 +44,7 @@ func startProducer() {
 // 消费者
 func startConsumer() {
     cfg := nsq.NewConfig()
+    cfg.MaxInFlight = 8
 
     consumer, err := nsq.NewConsumer("testtopic", "channel01", cfg)
     if err != nil {
@@ -51,13 +54,20 @@ func startConsumer() {
     i := 1
     // 设置消息处理函数
     consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
+        message.DisableAutoResponse()
         log.Printf("[%s]consumer resp: %s",strconv.Itoa(i), string(message.Body))
+        message.Finish()
         i++
         return nil
     }))
 
     // 连接到单例nsqd
-    if err := consumer.ConnectToNSQD(nsqdServer); err != nil {
+    //err := consumer.ConnectToNSQLookupd("127.0.0.1:4161")
+    err = consumer.ConnectToNSQD(nsqdServer)
+    if err != nil {
         log.Fatal(err)
     }
+
+    <-exitChan
+    log.Println("Consumer quit")
 }

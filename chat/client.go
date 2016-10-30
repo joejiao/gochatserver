@@ -19,7 +19,7 @@ var (
 type Client struct {
     lock        *sync.RWMutex
     server      *ChatServer
-    conn        *net.TCPConn
+    conn        net.Conn
     rooms       map[string]*Room
     roomName    string
     incoming    chan *Message
@@ -29,7 +29,7 @@ type Client struct {
     writer      *bufio.Writer
 }
 
-func NewClient(conn *net.TCPConn, server *ChatServer) *Client {
+func NewClient(conn net.Conn, server *ChatServer) *Client {
         client := &Client{
             lock:     new(sync.RWMutex),
             server:   server,
@@ -291,7 +291,7 @@ func (self *Client) quit() {
     }()
 
     for _, room := range self.rooms {
-        room.quiting <- self.conn
+        room.delClient(self.conn)
     }
 
     //close(self.outgoing)
