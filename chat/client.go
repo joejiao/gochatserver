@@ -131,7 +131,7 @@ func (self *Client) read() {
         }
         line = strings.TrimRight(line, "\n")
 
-        msg := &Message{data: line, receiver: self.roomName}
+        msg := &Message{Data: line, Receiver: self.roomName}
         self.incoming <- msg
         //runtime.Gosched()
     }

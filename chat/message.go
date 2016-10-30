@@ -1,7 +1,7 @@
 package chat
 
 type Message struct {
-    sender string
-    receiver string
-    data string
+    Sender string   `json:"sender"`
+    Receiver string `json:"receiver"`
+    Data string     `json:"data"`
 }

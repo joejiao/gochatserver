@@ -4,6 +4,7 @@ import (
     "sync"
     "net"
     "log"
+    "encoding/json"
 
     "github.com/nats-io/nats"
 )
@@ -41,10 +42,9 @@ func (self *Room) listen() {
     go self.readFromNATS()
 
     for msg := range self.outgoing {
-        //log.Printf("Received on [%s]: '%s'\n", m.Subject, string(m.Data))
+        //log.Printf("Received: %+v\n", msg)
         //self.broadcast(msgData)
         self.writeToRingBuffer(msg)
-        //runtime.Gosched()
     }
 }
 
@@ -68,28 +68,34 @@ func (self *Room) writeToNATS() {
     }()
 
     nc, _  := nats.Connect(serverAddr)
-    ec, err := nats.NewEncodedConn(nc, "json")
+    ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
     if err != nil {
         log.Fatal(err)
     }
     defer ec.Close()
 
     for msg := range self.incoming {
+        //log.Printf("writeToNATS: %+v\n", msg)
         ec.Publish(self.name, msg)
     }
 }
 
 func (self *Room) readFromNATS() {
     nc, _ := nats.Connect(serverAddr)
-    ec, err := nats.NewEncodedConn(nc, "json")
+    ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
     if err != nil {
         log.Fatalf("nat.NewEncodedConn error: %v\n", err)
     }
     defer ec.Close()
 
     // 订阅主题, 当收到subject时候执行后面的func函数
-    ec.Subscribe(self.name, func(msg *Message) {
-        self.outgoing <- msg
+    ec.Subscribe(self.name, func(msg strig) {
+        m := Message{}
+        err := json.Unmarshal([]byte(msg), &m)
+        if err != nil {
+            log.Println("json.Unmarshal:", err)
+        }
+        self.outgoing <- &m
     })
 
     <-self.quiting
@@ -97,7 +103,7 @@ func (self *Room) readFromNATS() {
 
 func (self *Room) writeToRingBuffer(msg *Message) {
     rb := self.ringBuffer
-    rb.put(msg.data)
+    rb.put(msg.Data)
 }
 
 /*
