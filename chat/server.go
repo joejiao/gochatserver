@@ -35,13 +35,14 @@ BAMCA0gAMEUCIEKzVMF3JqjQjuM2rX7Rx8hancI5KJhwfeKu1xbyR7XaAiEA2UT7
 
 type ChatServer struct {
     sync.RWMutex
-    bind_to string
     rooms   map[string]*Room
+    opts    *Options
 }
 
-func NewChatServer(bind_to string) *ChatServer {
+func NewChatServer(opts *Options) *ChatServer {
     rooms :=  make(map[string]*Room)
-    return &ChatServer{bind_to: bind_to, rooms: rooms}
+    server := &ChatServer{rooms: rooms, opts: opts}
+    return server
 }
 
 // GetRoom return a room, if this name of room is not exist,
@@ -52,7 +53,7 @@ func (self *ChatServer) GetRoom(name string) *Room {
     self.RUnlock()
 
     if !ok {
-        room := NewRoom(name)
+        room := NewRoom(name, self.opts)
 
         self.Lock()
         self.rooms[name] = room
@@ -97,7 +98,7 @@ func (self *ChatServer) clearRoom() {
 }
 
 func (self *ChatServer) ListenAndServe() {
-    tcpAddr, err := net.ResolveTCPAddr("tcp", self.bind_to)
+    tcpAddr, err := net.ResolveTCPAddr("tcp", self.opts.Listen)
     if err != nil {
         log.Println("ResolveTCPAddr error: " + err.Error())
         return

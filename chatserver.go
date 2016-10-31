@@ -1,6 +1,7 @@
 package main
 
 import (
+    "flag"
     "runtime"
     "runtime/debug"
     "net/http"
@@ -8,6 +9,13 @@ import (
     "log"
     "time"
     "./chat"
+)
+
+var (
+    clusterQueue = flag.String("cluster_queue", "nats://10.1.64.2:4222", "Cluster Gnats URL")
+    filterQueue = flag.String("filter_queue", "nats://127.0.0.1:4222", "Msg Filter Gnats URL")
+    withFilter =flag.Bool("with_filter", false, "Use Msg Filter")
+    listen = flag.String("listen", "0.0.0.0:9999", "Server Listen Address:Port")
 )
 
 func status() {
@@ -23,6 +31,8 @@ func status() {
 }
 
 func main() {
+    flag.Parse()
+
     //go status()
 
     /*
@@ -39,6 +49,7 @@ func main() {
         http.ListenAndServe("0.0.0.0:3339", nil)
     }()
 
-    server := chat.NewChatServer("0.0.0.0:9999")
+    opts := &chat.Options{ClusterQueue: *clusterQueue, FilterQueue: *filterQueue, WithFilter: *withFilter, Listen: *listen}
+    server := chat.NewChatServer(opts)
     server.ListenAndServe()
 }

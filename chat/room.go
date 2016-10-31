@@ -4,7 +4,7 @@ import (
     "sync"
     "net"
     "log"
-    "encoding/json"
+//    "encoding/json"
 
     "github.com/nats-io/nats"
 )
@@ -22,24 +22,31 @@ type Room struct {
     outgoing    chan *Message
     quiting     chan struct{}
     ringBuffer  *RingBuffer
+    opts        *Options
 }
 
-func NewRoom(name string) *Room {
+func NewRoom(name string, opts *Options) *Room {
     room := &Room{
         name:       name,
         clients:    make(map[net.Conn]*Client),
         incoming:   make(chan *Message),
         outgoing:   make(chan *Message, 1000),
-        quiting:  make(chan struct{}),
+        quiting:    make(chan struct{}),
         ringBuffer: NewRingBuffer(ringBufferMaxSize),
+        opts:       opts,
     }
     return room
 }
 
 // 每一个room有一个goro负责路由
 func (self *Room) listen() {
-    go self.writeToNATS()
-    go self.readFromNATS()
+    if self.opts.WithFilter == true {
+        go self.writeToFilterNATS()
+    } else {
+        go self.writeToClusterNATS()
+    }
+
+    go self.readFromClusterNATS()
 
     for msg := range self.outgoing {
         //log.Printf("Received: %+v\n", msg)
@@ -60,14 +67,35 @@ func (self *Room) delClient(conn net.Conn) {
     //log.Printf("delete and close conn: %s\n", conn.RemoteAddr().String())
 }
 
-func (self *Room) writeToNATS() {
+func (self *Room) writeToFilterNATS() {
     defer func() {
         if r := recover(); r != nil {
             log.Printf("runtime panic: room.writeToNATS: %s\n", r)
         }
     }()
 
-    nc, _  := nats.Connect(serverAddr)
+    topic := "origMsgQueue"
+    nc, _  := nats.Connect(self.opts.FilterQueue)
+    ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer ec.Close()
+
+    for msg := range self.incoming {
+        //log.Printf("writeToNATS: %+v\n", msg)
+        ec.Publish(topic, msg)
+    }
+}
+
+func (self *Room) writeToClusterNATS() {
+    defer func() {
+        if r := recover(); r != nil {
+            log.Printf("runtime panic: room.writeToNATS: %s\n", r)
+        }
+    }()
+
+    nc, _  := nats.Connect(self.opts.ClusterQueue)
     ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
     if err != nil {
         log.Fatal(err)
@@ -80,8 +108,8 @@ func (self *Room) writeToNATS() {
     }
 }
 
-func (self *Room) readFromNATS() {
-    nc, _ := nats.Connect(serverAddr)
+func (self *Room) readFromClusterNATS() {
+    nc, _ := nats.Connect(self.opts.ClusterQueue)
     ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
     if err != nil {
         log.Fatalf("nat.NewEncodedConn error: %v\n", err)
@@ -89,13 +117,9 @@ func (self *Room) readFromNATS() {
     defer ec.Close()
 
     // 订阅主题, 当收到subject时候执行后面的func函数
-    ec.Subscribe(self.name, func(msg strig) {
-        m := Message{}
-        err := json.Unmarshal([]byte(msg), &m)
-        if err != nil {
-            log.Println("json.Unmarshal:", err)
-        }
-        self.outgoing <- &m
+    ec.Subscribe(self.name, func(msg *Message) {
+        //log.Printf("readFromNATS: %+v\n", msg)
+        self.outgoing <- msg
     })
 
     <-self.quiting
@@ -148,8 +172,8 @@ func (self *Room) quit() {
     }()
 
     log.Printf("close room %s:%d\n", self.name, len(self.clients))
+    close(self.quiting)
     close(self.incoming)
     close(self.outgoing)
-    close(self.quiting)
     //self = nil
 }
