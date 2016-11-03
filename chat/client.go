@@ -10,6 +10,7 @@ import (
     "strings"
     "time"
     "io"
+    "strconv"
 )
 
 var (
@@ -19,6 +20,7 @@ var (
 type Client struct {
     lock        *sync.RWMutex
     server      *ChatServer
+    uid         int
     conn        net.Conn
     rooms       map[string]*Room
     roomName    string
@@ -33,6 +35,7 @@ func NewClient(conn net.Conn, server *ChatServer) *Client {
         client := &Client{
             lock:     new(sync.RWMutex),
             server:   server,
+            uid:      -1,
             conn:     conn,
             rooms:    make(map[string]*Room),
             roomName: "",
@@ -132,7 +135,11 @@ func (self *Client) read() {
         line = strings.TrimRight(line, "\n")
 
         msg := &Message{Data: line, Receiver: self.roomName}
-        self.incoming <- msg
+
+        filter := self.server.filter
+        if filter.IsBlocked(strconv.Itoa(self.uid), self.roomName) == false {
+            self.incoming <- msg
+        }
         //runtime.Gosched()
     }
 }

@@ -10,7 +10,6 @@ import (
 )
 
 const (
-    serverAddr = "nats://10.1.64.2:4222"
     ringBufferMaxSize = 512
 )
 
@@ -22,10 +21,10 @@ type Room struct {
     outgoing    chan *Message
     quiting     chan struct{}
     ringBuffer  *RingBuffer
-    opts        *Options
+    server      *ChatServer
 }
 
-func NewRoom(name string, opts *Options) *Room {
+func NewRoom(name string, server *ChatServer) *Room {
     room := &Room{
         name:       name,
         clients:    make(map[net.Conn]*Client),
@@ -33,14 +32,14 @@ func NewRoom(name string, opts *Options) *Room {
         outgoing:   make(chan *Message, 1000),
         quiting:    make(chan struct{}),
         ringBuffer: NewRingBuffer(ringBufferMaxSize),
-        opts:       opts,
+        server:     server,
     }
     return room
 }
 
 // 每一个room有一个goro负责路由
 func (self *Room) listen() {
-    if self.opts.WithFilter == true {
+    if self.server.opts.WithFilter == true {
         go self.writeToFilterNATS()
     } else {
         go self.writeToClusterNATS()
@@ -74,8 +73,8 @@ func (self *Room) writeToFilterNATS() {
         }
     }()
 
-    topic := "origMsgQueue"
-    nc, _  := nats.Connect(self.opts.FilterQueue)
+    topic := self.server.opts.FilterTopic
+    nc, _  := nats.Connect(self.server.opts.FilterQueue)
     ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
     if err != nil {
         log.Fatal(err)
@@ -95,7 +94,7 @@ func (self *Room) writeToClusterNATS() {
         }
     }()
 
-    nc, _  := nats.Connect(self.opts.ClusterQueue)
+    nc, _  := nats.Connect(self.server.opts.ClusterQueue)
     ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
     if err != nil {
         log.Fatal(err)
@@ -109,7 +108,7 @@ func (self *Room) writeToClusterNATS() {
 }
 
 func (self *Room) readFromClusterNATS() {
-    nc, _ := nats.Connect(self.opts.ClusterQueue)
+    nc, _ := nats.Connect(self.server.opts.ClusterQueue)
     ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
     if err != nil {
         log.Fatalf("nat.NewEncodedConn error: %v\n", err)

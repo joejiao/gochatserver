@@ -5,5 +5,6 @@ type Options struct {
     FilterQueue     string
     WithFilter      bool
     Listen          string
+    FilterTopic     string
 }
 

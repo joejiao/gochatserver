@@ -37,11 +37,16 @@ type ChatServer struct {
     sync.RWMutex
     rooms   map[string]*Room
     opts    *Options
+    filter  *Filter
 }
 
 func NewChatServer(opts *Options) *ChatServer {
     rooms :=  make(map[string]*Room)
-    server := &ChatServer{rooms: rooms, opts: opts}
+
+    filter := NewFilter()
+    filter.StartAndServe()
+
+    server := &ChatServer{rooms: rooms, filter: filter}
     return server
 }
 
@@ -53,7 +58,7 @@ func (self *ChatServer) GetRoom(name string) *Room {
     self.RUnlock()
 
     if !ok {
-        room := NewRoom(name, self.opts)
+        room := NewRoom(name, self)
 
         self.Lock()
         self.rooms[name] = room
