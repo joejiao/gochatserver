@@ -12,7 +12,10 @@ type Filter struct {
     BlackList
 }
 
-//BlackList.Data {"1":1, "2":1, "3":0, "4":3}
+// blacklist.json
+// 数据为json, 格式: uid:roomId, 数据类型: uid是string，roomId是int, 如果全局禁言，则roomId为0
+// {"1":1, "2":1, "3":0, "4":3}
+
 type BlackList struct {
     sync.RWMutex
     Enable      bool

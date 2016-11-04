@@ -10,7 +10,6 @@ import (
     "strings"
     "time"
     "io"
-    "strconv"
 )
 
 var (
@@ -20,9 +19,9 @@ var (
 type Client struct {
     lock        *sync.RWMutex
     server      *ChatServer
-    uid         int
-    conn        net.Conn
+    uid         string
     roomName    string
+    conn        net.Conn
     rooms       map[string]*Room
     incoming    chan *Message
     quiting     chan struct{}
@@ -34,10 +33,10 @@ func NewClient(conn net.Conn, server *ChatServer) *Client {
         client := &Client{
             lock:     new(sync.RWMutex),
             server:   server,
-            uid:      -1,
+            uid:      "-1",
+            roomName: "",
             conn:     conn,
             rooms:    make(map[string]*Room),
-            roomName: "",
             incoming: make(chan *Message),
             quiting:  make(chan struct{}),
             reader:   bufio.NewReaderSize(conn, 1024),
@@ -139,7 +138,7 @@ func (self *Client) read() {
 
         msg := &Message{Data: line, Receiver: self.roomName}
 
-        if filter.IsBlocked(strconv.Itoa(self.uid), self.roomName) == false {
+        if filter.IsBlocked(self.uid, self.roomName) == false {
             self.incoming <- msg
         }
         //runtime.Gosched()
@@ -290,7 +289,7 @@ func (self *Client) getUserId() (err error) {
     }
     line = strings.TrimRight(line, "\n")
 
-    re, _ := regexp.Compile("^id (.+)$")
+    re, _ := regexp.Compile("^uid (.+)$")
     matches := re.FindStringSubmatch(line)
     //log.Printf("room matches: %s, %#v", len(matches), matches)
 
@@ -298,7 +297,7 @@ func (self *Client) getUserId() (err error) {
         err = errors.New("not userId: " + line)
     } else {
         err = nil
-        self.roomName = matches[1]
+        self.uid = matches[1]
     }
     return
 }

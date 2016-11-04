@@ -86,7 +86,7 @@ func connection(ch chan int, i int) {
         return
     }
 
-    if _, err := conn.Write([]byte("id " + strconv.Itoa(i) +"\n")); err != nil {
+    if _, err := conn.Write([]byte("uid " + strconv.Itoa(i) +"\n")); err != nil {
         log.Println("regsiter id:", err)
         return
     }
