@@ -1,4 +1,4 @@
-#聊天服务器
+# 聊天服务器
 ---
 
 ## 架构
@@ -18,7 +18,7 @@ Server 聊天服务器全局管理
 
 ## 配置
 1. 黑名单数据
-```
+```bash
 mkdir ./filter
 cp blacklist.json ./filter/
 cat ./filter/blacklist.json
@@ -28,12 +28,12 @@ cat ./filter/blacklist.json
 
 ## 运行
 1. 启动MessageQueue集群
-```
+```bash
 gnatsd -m 1234
 ```
 
 2. 启动聊天服务器
-```
+```bash
 ./chatserver -filter_dir="./filter" -listen="0.0.0.0:9999" -nats_url="nats://127.0.0.1:4222"
 ```
 
