@@ -42,7 +42,7 @@ gnatsd -m 1234
 ```
 
 ## API
-服务器默传输为TLS加密,连接代码如下:
+服务器默认传输为TLS加密,连接代码如下:
 ```go
 conf := &tls.Config{
     InsecureSkipVerify: true,
