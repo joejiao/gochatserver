@@ -12,9 +12,8 @@ import (
 )
 
 var (
-    clusterQueue = flag.String("cluster_queue", "nats://10.1.64.2:4222", "Cluster Gnats URL")
-    filterQueue = flag.String("filter_queue", "nats://127.0.0.1:4222", "Msg Filter Gnats URL")
-    withFilter =flag.Bool("with_filter", false, "Use Msg Filter")
+    natsUrl = flag.String("nats_url", "nats://10.1.64.2:4222", "Cluster Gnats URL")
+    filterDir = flag.String("filter_dir", "./filter", "Msg Filter File Dir")
     listen = flag.String("listen", "0.0.0.0:9999", "Server Listen Address:Port")
 )
 
@@ -49,7 +48,7 @@ func main() {
         http.ListenAndServe("0.0.0.0:3339", nil)
     }()
 
-    opts := &chat.Options{ClusterQueue: *clusterQueue, FilterQueue: *filterQueue, WithFilter: *withFilter, Listen: *listen, FilterTopic: "origMsgQueue"}
+    opts := &chat.Options{NatsUrl: *natsUrl, FilterDir: *filterDir, Listen: *listen}
     server := chat.NewChatServer(opts)
     server.ListenAndServe()
 }

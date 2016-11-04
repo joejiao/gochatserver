@@ -106,18 +106,18 @@ func (self *Room) writeToNATS() {
 }
 
 func (self *Room) readFromNATS() {
+    nc, _ := nats.Connect(self.server.opts.NatsUrl)
+    ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
+    if err != nil {
+        log.Fatalf("nat.NewEncodedConn error: %v\n", err)
+    }
+
     defer func() {
         if r := recover(); r != nil {
             log.Printf("readFromNATS runtime panic: %+v\n", r)
         }
         ec.Close()
     }()
-
-    nc, _ := nats.Connect(self.server.opts.NatsUrl)
-    ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
-    if err != nil {
-        log.Fatalf("nat.NewEncodedConn error: %v\n", err)
-    }
 
     // 订阅主题, 当收到subject时候执行后面的func函数
     ec.Subscribe(self.name, func(msg *Message) {

@@ -86,6 +86,11 @@ func connection(ch chan int, i int) {
         return
     }
 
+    if _, err := conn.Write([]byte("id " + strconv.Itoa(i) +"\n")); err != nil {
+        log.Println("regsiter id:", err)
+        return
+    }
+
     joinRoom := "join room" + roomName + "\n"
     if _, err := conn.Write([]byte(joinRoom)); err != nil {
         log.Println("join room:", err)
