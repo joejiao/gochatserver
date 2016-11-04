@@ -17,7 +17,12 @@ Filter 信息过滤和黑名单处理
 Server 聊天服务器全局管理
 
 ## 配置
+<<<<<<< HEAD
 1. 黑名单数据  
+=======
+1. 黑名单数据
+
+>>>>>>> 81afd5a7719cddd632a32b25606365504d23d2d6
 ```bash
 mkdir ./filter
 cp blacklist.json ./filter/
