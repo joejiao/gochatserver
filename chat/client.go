@@ -22,10 +22,9 @@ type Client struct {
     server      *ChatServer
     uid         int
     conn        net.Conn
-    rooms       map[string]*Room
     roomName    string
+    rooms       map[string]*Room
     incoming    chan *Message
-    //outgoing    chan string
     quiting     chan struct{}
     reader      *bufio.Reader
     writer      *bufio.Writer
@@ -40,10 +39,9 @@ func NewClient(conn net.Conn, server *ChatServer) *Client {
             rooms:    make(map[string]*Room),
             roomName: "",
             incoming: make(chan *Message),
-            //outgoing: make(chan string, 1000),
             quiting:  make(chan struct{}),
             reader:   bufio.NewReaderSize(conn, 1024),
-            writer:   bufio.NewWriter(conn),
+            writer:   bufio.NewWriterSize(conn, 1024),
         }
         return client
 }
@@ -119,6 +117,7 @@ func (self *Client) read() {
 
     //br := bufio.NewReaderSize(self.conn, 1024)
 
+    filter := self.server.filter
     for {
         //self.setDeadLine()
         line, err := self.reader.ReadString('\n')
@@ -136,7 +135,6 @@ func (self *Client) read() {
 
         msg := &Message{Data: line, Receiver: self.roomName}
 
-        filter := self.server.filter
         if filter.IsBlocked(strconv.Itoa(self.uid), self.roomName) == false {
             self.incoming <- msg
         }

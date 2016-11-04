@@ -39,13 +39,9 @@ func NewRoom(name string, server *ChatServer) *Room {
 
 // 每一个room有一个goro负责路由
 func (self *Room) listen() {
-    if self.server.opts.WithFilter == true {
-        go self.writeToFilterNATS()
-    } else {
-        go self.writeToClusterNATS()
-    }
+    go self.writeToNATS()
 
-    go self.readFromClusterNATS()
+    go self.readFromNATS()
 
     for msg := range self.outgoing {
         //log.Printf("Received: %+v\n", msg)
@@ -66,6 +62,7 @@ func (self *Room) delClient(conn net.Conn) {
     //log.Printf("delete and close conn: %s\n", conn.RemoteAddr().String())
 }
 
+/*
 func (self *Room) writeToFilterNATS() {
     defer func() {
         if r := recover(); r != nil {
@@ -86,15 +83,16 @@ func (self *Room) writeToFilterNATS() {
         ec.Publish(topic, msg)
     }
 }
+*/
 
-func (self *Room) writeToClusterNATS() {
+func (self *Room) writeToNATS() {
     defer func() {
         if r := recover(); r != nil {
             log.Printf("runtime panic: room.writeToNATS: %s\n", r)
         }
     }()
 
-    nc, _  := nats.Connect(self.server.opts.ClusterQueue)
+    nc, _  := nats.Connect(self.server.opts.NatsUrl)
     ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
     if err != nil {
         log.Fatal(err)
@@ -107,13 +105,19 @@ func (self *Room) writeToClusterNATS() {
     }
 }
 
-func (self *Room) readFromClusterNATS() {
-    nc, _ := nats.Connect(self.server.opts.ClusterQueue)
+func (self *Room) readFromNATS() {
+    defer func() {
+        if r := recover(); r != nil {
+            log.Printf("readFromNATS runtime panic: %+v\n", r)
+        }
+        ec.Close()
+    }()
+
+    nc, _ := nats.Connect(self.server.opts.NatsUrl)
     ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
     if err != nil {
         log.Fatalf("nat.NewEncodedConn error: %v\n", err)
     }
-    defer ec.Close()
 
     // 订阅主题, 当收到subject时候执行后面的func函数
     ec.Subscribe(self.name, func(msg *Message) {
@@ -125,8 +129,7 @@ func (self *Room) readFromClusterNATS() {
 }
 
 func (self *Room) writeToRingBuffer(msg *Message) {
-    rb := self.ringBuffer
-    rb.put(msg.Data)
+    self.ringBuffer.put(msg.Data)
 }
 
 /*
@@ -171,6 +174,8 @@ func (self *Room) quit() {
     }()
 
     log.Printf("close room %s:%d\n", self.name, len(self.clients))
+
+    self.server.DelRoom(self.name)
     close(self.quiting)
     close(self.incoming)
     close(self.outgoing)

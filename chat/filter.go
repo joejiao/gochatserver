@@ -32,6 +32,7 @@ func NewFilter() *Filter {
 }
 
 func (self *Filter) StartAndServe() {
+    self.BlackList.loadData()
     // 定时重新载入数据
     go func() {
         ticker := time.NewTicker(time.Second * 120)

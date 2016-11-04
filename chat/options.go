@@ -1,10 +1,8 @@
 package chat
 
 type Options struct {
-    ClusterQueue    string
-    FilterQueue     string
-    WithFilter      bool
+    NatsUrl         string
+    FilterDir       string
     Listen          string
-    FilterTopic     string
 }
 

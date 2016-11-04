@@ -17,7 +17,7 @@ Filter 信息过滤和黑名单处理
 Server 聊天服务器全局管理
 
 ## 配置
-1. 黑名单数据
+1. 黑名单数据  
 ```bash
 mkdir ./filter
 cp blacklist.json ./filter/

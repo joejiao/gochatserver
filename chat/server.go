@@ -46,7 +46,7 @@ func NewChatServer(opts *Options) *ChatServer {
     filter := NewFilter()
     filter.StartAndServe()
 
-    server := &ChatServer{rooms: rooms, filter: filter}
+    server := &ChatServer{rooms: rooms, opts: opts, filter: filter}
     return server
 }
 
@@ -68,6 +68,12 @@ func (self *ChatServer) GetRoom(name string) *Room {
     }
 
     return self.rooms[name]
+}
+
+func (self *ChatServer) DelRoom(name string) {
+    self.Lock()
+    delete(self.rooms, name)
+    self.Unlock()
 }
 
 // This method maybe should add a lock.
