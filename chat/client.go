@@ -52,7 +52,11 @@ func (self *Client) handler() {
         self.quit()
         return
     }
-
+    if err := self.getUserId(); err != nil {
+        log.Println("client.getUserId:", err)
+        self.quit()
+        return
+    }
     if err := self.getRoomName(); err != nil {
         log.Println("client.getRoomName:", err)
         self.quit()
@@ -269,6 +273,29 @@ func (self *Client) getRoomName() (err error) {
 
     if len(matches) < 2 {
         err = errors.New("not room name: " + line)
+    } else {
+        err = nil
+        self.roomName = matches[1]
+    }
+    return
+}
+
+func (self *Client) getUserId() (err error) {
+    var line string
+
+    line, err = self.reader.ReadString('\n')
+    if err != nil {
+        log.Println("get userId faild:", line, err)
+        return
+    }
+    line = strings.TrimRight(line, "\n")
+
+    re, _ := regexp.Compile("^id (.+)$")
+    matches := re.FindStringSubmatch(line)
+    //log.Printf("room matches: %s, %#v", len(matches), matches)
+
+    if len(matches) < 2 {
+        err = errors.New("not userId: " + line)
     } else {
         err = nil
         self.roomName = matches[1]

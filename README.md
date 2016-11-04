@@ -55,5 +55,6 @@ conn, err := tls.Dial("tcp", *hostAndPort, conf)
 ```bash
 ncat --ssl 127.0.0.1 9999
 auth password
+id 1111
 join roomId
 ```
