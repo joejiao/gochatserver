@@ -1,9 +1,10 @@
-package main
+package nsqtest
 
 import (
     "log"
     //"time"
     "strconv"
+    "testing"
 
     "github.com/nsqio/go-nsq"
 )
@@ -13,13 +14,15 @@ var (
     exitChan = make(chan struct{})
 )
 
+/*
 func main() {
     go startConsumer()
     startProducer()
 }
+*/
 
 // 生产者
-func startProducer() {
+func startProducer(b *testing.B) {
     cfg := nsq.NewConfig()
     cfg.MaxInFlight = 8
 
@@ -28,21 +31,20 @@ func startProducer() {
         log.Fatal(err)
     }
 
+    b.ResetTimer()
     // 发布消息
-    i := 0
-    for {
+    for i := 0; i < b.N; i++ {
         msg := "test message " + strconv.Itoa(i)
         if err := producer.Publish("testtopic", []byte(msg)); err != nil {
             log.Fatal("publish error: " + err.Error())
         }
 
         //time.Sleep(1 * time.Second)
-        i++
     }
 }
 
 // 消费者
-func startConsumer() {
+func startConsumer(b *testing.B) {
     cfg := nsq.NewConfig()
     cfg.MaxInFlight = 8
 
@@ -55,7 +57,7 @@ func startConsumer() {
     // 设置消息处理函数
     consumer.AddHandler(nsq.HandlerFunc(func(message *nsq.Message) error {
         message.DisableAutoResponse()
-        log.Printf("[%s]consumer resp: %s",strconv.Itoa(i), string(message.Body))
+        //log.Printf("[%s]consumer resp: %s",strconv.Itoa(i), string(message.Body))
         message.Finish()
         i++
         return nil

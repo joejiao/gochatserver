@@ -49,7 +49,7 @@ func main() {
         http.ListenAndServe("0.0.0.0:3339", nil)
     }()
 
-    opts := &chat.Options{ClusterQueue: *clusterQueue, FilterQueue: *filterQueue, WithFilter: *withFilter, Listen: *listen}
+    opts := &chat.Options{ClusterQueue: *clusterQueue, FilterQueue: *filterQueue, WithFilter: *withFilter, Listen: *listen, FilterTopic: "origMsgQueue"}
     server := chat.NewChatServer(opts)
     server.ListenAndServe()
 }
