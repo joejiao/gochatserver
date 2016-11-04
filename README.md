@@ -7,15 +7,15 @@
 SERVER|FILTER
     /  \
  ROOM  ROOM ------ MessageQueue
-     /   |   \
-   C1   C2   C3
+     /  |  \
+   C1   C2  C3
 ```
 
-Client 用户长连接管理
-Room 聊天室信息交换处理
-MessageQueue 分布式消息队列，为所有的room提供信息交换
-Filter 信息过滤和黑名单处理
-Server 聊天服务器全局管理
+Client 用户长连接管理  
+Room 聊天室信息交换处理  
+MessageQueue 分布式消息队列，为所有的room提供信息交换  
+Filter 信息过滤和黑名单处理  
+Server 聊天服务器全局管理  
 
 ## 配置
 - 黑名单数据
