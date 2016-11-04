@@ -17,7 +17,7 @@ var (
 )
 
 type Client struct {
-    lock        *sync.RWMutex
+    lock        sync.RWMutex
     server      *ChatServer
     uid         string
     roomName    string
@@ -31,7 +31,6 @@ type Client struct {
 
 func NewClient(conn net.Conn, server *ChatServer) *Client {
         client := &Client{
-            lock:     new(sync.RWMutex),
             server:   server,
             uid:      "-1",
             roomName: "",
