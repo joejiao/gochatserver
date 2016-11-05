@@ -33,20 +33,32 @@ func (seq *Sequence) cas(old, new int64) bool {
 	return atomic.CompareAndSwapInt64(&seq.cursor, old, new)
 }
 
+type node struct {
+    data interface{}
+}
 type RingBuffer struct {
 	size             int64
 	mask             int64
 	producerSequence *Sequence
-	buffer           []interface{}
+	//buffer           []interface{}
+    nodes           []*node
 }
 
 func NewRingBuffer(size int64) *RingBuffer {
-	return &RingBuffer{
+	rb := &RingBuffer{
 		size:             size,
 		mask:             size - 1,
 		producerSequence: NewSequence(),
-		buffer:           make([]interface{}, size),
+		//buffer:           make([]interface{}, size),
+        nodes:            make([]*node, size),
 	}
+
+    //rb.nodes = make([]*node, size)
+    for i := int64(0); i < size; i++ {
+        rb.nodes[i] = &node{data: nil}
+    }
+
+    return rb
 }
 func (rb *RingBuffer) put(item interface{}) error {
 	producerPos := rb.producerSequence.get()
@@ -59,7 +71,8 @@ func (rb *RingBuffer) put(item interface{}) error {
 	}
 
 	//fmt.Println(producerPos, item)
-	rb.buffer[nextPos&rb.mask] = item
+	//rb.buffer[nextPos&rb.mask] = item
+    rb.nodes[nextPos&rb.mask].data = item
 	return nil
 }
 
@@ -123,7 +136,8 @@ func (this *Consumer) get() (interface{}, error) {
 
     nextPos := consumerPos + 1
 
-    item := this.ringBuffer.buffer[nextPos&this.ringBuffer.mask]
+    item := this.ringBuffer.nodes[nextPos&this.ringBuffer.mask].data
+    //item := this.ringBuffer.buffer[nextPos&this.ringBuffer.mask]
     this.sequence.add(1)
     return item, nil
 }
@@ -141,7 +155,8 @@ func (this *Consumer) batchGet() ([]interface{}, error) {
     items := make([]interface{}, batch)
 
     for i := int64(0); i < batch; i++ {
-        items[i] = this.ringBuffer.buffer[nextPos&this.ringBuffer.mask]
+        //items[i] = this.ringBuffer.buffer[nextPos&this.ringBuffer.mask]
+        items[i] = this.ringBuffer.nodes[nextPos&this.ringBuffer.mask].data
         nextPos++
     }
 
@@ -155,13 +170,13 @@ func main() {
     var size int64 = 512
     rb := NewRingBuffer(size)
 
-    for i := int64(0); i < size + 39; i++ {
+    for i := int64(0); i < size + 139; i++ {
 		str := strconv.Itoa(int(i))
 		//fmt.Println(str)
 		rb.put(str)
 	}
 
-	fmt.Printf("%+v\n", rb.buffer)
+	fmt.Printf("%+v\n", rb.nodes)
 	c1 := NewConsumer(rb)
 	for i := int64(0); i < size; i++ {
 		str, err := c1.get()
