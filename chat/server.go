@@ -43,7 +43,7 @@ type ChatServer struct {
 func NewChatServer(opts *Options) *ChatServer {
     rooms :=  make(map[string]*Room)
 
-    filter := NewFilter()
+    filter := NewFilter(opts)
     filter.StartAndServe()
 
     server := &ChatServer{rooms: rooms, opts: opts, filter: filter}
@@ -92,19 +92,19 @@ func (self *ChatServer) reportStatus() {
     }
 }
 
-func (self *ChatServer) clearRoom() {
+func (self *ChatServer) cleanRoom() {
     ticker := time.NewTicker(time.Second * 120)
     defer ticker.Stop()
 
     for _ = range ticker.C {
-        self.RLock()
+        self.Lock()
         for _, room := range self.rooms {
             if len(room.clients) == 0 {
                 delete(self.rooms, room.name)
                 room.quit()
             }
         }
-        self.RUnlock()
+        self.Unlock()
     }
 }
 
@@ -133,7 +133,7 @@ func (self *ChatServer) ListenAndServe() {
     defer ln.Close()
 
     go self.reportStatus()
-    go self.clearRoom()
+    go self.cleanRoom()
 
     // Main loop
     for {

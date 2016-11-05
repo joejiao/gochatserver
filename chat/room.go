@@ -175,7 +175,6 @@ func (self *Room) quit() {
 
     log.Printf("close room %s:%d\n", self.name, len(self.clients))
 
-    self.server.DelRoom(self.name)
     close(self.quiting)
     close(self.incoming)
     close(self.outgoing)

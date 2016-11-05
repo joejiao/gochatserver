@@ -23,11 +23,11 @@ type BlackList struct {
     Data        map[string]interface{}
 }
 
-func NewFilter() *Filter {
+func NewFilter(opts *Options) *Filter {
     filter := &Filter{
         BlackList: BlackList{
             Enable:     true,
-            FileName:   "./filter/blacklist.json",
+            FileName:   opts.FilterDir + "/blacklist.json",
             Data:       make(map[string]interface{}),
         },
     }

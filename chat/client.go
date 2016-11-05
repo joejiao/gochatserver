@@ -17,7 +17,7 @@ var (
 )
 
 type Client struct {
-    lock        sync.RWMutex
+    sync.RWMutex
     server      *ChatServer
     uid         string
     roomName    string
@@ -79,9 +79,9 @@ func (self *Client) listen() {
                 return
             }
 
-            self.lock.RLock()
+            self.RLock()
             room := self.rooms[self.roomName]
-            self.lock.RUnlock()
+            self.RUnlock()
 
             room.incoming <- msg
             // 传递close信号: client -> room
@@ -98,9 +98,9 @@ func (self *Client) listen() {
 func (self *Client) join() {
     room := self.server.GetRoom(self.roomName)
 
-    self.lock.Lock()
+    self.Lock()
     self.rooms[self.roomName] = room
-    self.lock.Unlock()
+    self.Unlock()
 
     room.addClient(self.conn, self)
     //room.Lock()
@@ -145,9 +145,9 @@ func (self *Client) read() {
 }
 
 func (self *Client) writeFromRingBuffer() {
-    self.lock.RLock()
+    self.RLock()
     room := self.rooms[self.roomName]
-    self.lock.RUnlock()
+    self.RUnlock()
 
     rb := room.ringBuffer
     pos := rb.producerSequence.get()
