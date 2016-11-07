@@ -35,8 +35,8 @@ cat ./filter/blacklist.json
 wget https://github.com/nats-io/gnatsd/releases/download/v0.9.4/gnatsd-v0.9.4-linux-amd64.zip
 unzip gnatsd-v0.9.4-linux-amd64.zip
 cp gnatsd-v0.9.4-linux-amd64/gnatsd /usr/local/sbin/
-chmod a+x chmod a+x /usr/local/sbin/gnatsd
-gnatsd -m 1234
+chmod a+x /usr/local/sbin/gnatsd
+nohup gnatsd -m 1234 > /tmp/gnatsd.log 2>&1 &
 ```
 
 - 启动聊天服务器
