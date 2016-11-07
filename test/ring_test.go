@@ -11,7 +11,7 @@ func BenchmarkRingBufferGet(b *testing.B) {
     rb := chat.NewRingBuffer(size)
 
     for i := int64(0); i < size + 139; i++ {
-        str := strconv.Itoa(int(i))
+        str := "hello world: " + strconv.Itoa(int(i))
         //fmt.Println(str)
         rb.Put(str)
     }
@@ -21,7 +21,6 @@ func BenchmarkRingBufferGet(b *testing.B) {
     for i := 0; i < b.N; i++ {
         _, err := c1.Get()
         if err != nil {
-            
             //b.Printf(err)
         }
     }
@@ -33,7 +32,7 @@ func BenchmarkRingBufferPut(b *testing.B) {
 
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
-        str := strconv.Itoa(int(i))
+        str := "hello world: " + strconv.Itoa(int(i))
         //fmt.Println(str)
         rb.Put(str)
     }
