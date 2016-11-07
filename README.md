@@ -32,9 +32,9 @@ cat ./filter/blacklist.json
 - 启动MessageQueue集群
 
 ```bash
-wget https://github.com/nats-io/gnatsd/releases/download/v0.9.4/gnatsd-v0.9.4-darwin-amd64.zip
-unzip gnatsd-v0.9.4-darwin-amd64.zip
-cp gnatsd-v0.9.4-darwin-amd64/gnatsd /usr/local/sbin/
+wget https://github.com/nats-io/gnatsd/releases/download/v0.9.4/gnatsd-v0.9.4-linux-amd64.zip
+unzip gnatsd-v0.9.4-linux-amd64.zip
+cp gnatsd-v0.9.4-linux-amd64/gnatsd /usr/local/sbin/
 chmod a+x chmod a+x /usr/local/sbin/gnatsd
 gnatsd -m 1234
 ```
