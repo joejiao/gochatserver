@@ -167,13 +167,13 @@ func (self *Client) writeFromRingBuffer() {
                 return
             }
 
-            l := consumer.len()
+            l := consumer.Len()
             if l == 0 {
                 time.Sleep(time.Second * 1)
                 continue
             }
 
-            items, err := consumer.batchGet()
+            items, err := consumer.BatchGet()
             if err != nil {
                 log.Println("consumer.batchGet:", err)
                 continue

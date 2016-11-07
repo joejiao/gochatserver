@@ -32,20 +32,32 @@ func (seq *Sequence) cas(old, new int64) bool {
 	return atomic.CompareAndSwapInt64(&seq.cursor, old, new)
 }
 
+type node struct {
+    data interface{}
+}
 type RingBuffer struct {
 	size             int64
 	mask             int64
 	producerSequence *Sequence
-	buffer           []interface{}
+	//buffer           []interface{}
+    nodes           []*node
 }
 
 func NewRingBuffer(size int64) *RingBuffer {
-	return &RingBuffer{
+	rb := &RingBuffer{
 		size:             size,
 		mask:             size - 1,
 		producerSequence: NewSequence(),
-		buffer:           make([]interface{}, size),
+		//buffer:           make([]interface{}, size),
+        nodes:            make([]*node, size),
 	}
+
+    //rb.nodes = make([]*node, size)
+    for i := int64(0); i < size; i++ {
+        rb.nodes[i] = &node{data: nil}
+    }
+
+    return rb
 }
 func (rb *RingBuffer) Put(item interface{}) error {
 	producerPos := rb.producerSequence.get()
@@ -58,7 +70,8 @@ func (rb *RingBuffer) Put(item interface{}) error {
 	}
 
 	//fmt.Println(producerPos, item)
-	rb.buffer[nextPos&rb.mask] = item
+	//rb.buffer[nextPos&rb.mask] = item
+    rb.nodes[nextPos&rb.mask].data = item
 	return nil
 }
 
@@ -121,7 +134,8 @@ func (self *Consumer) Get() (interface{}, error) {
 
     nextPos := consumerPos + 1
 
-    item := self.ringBuffer.buffer[nextPos&self.ringBuffer.mask]
+    //item := self.ringBuffer.buffer[nextPos&self.ringBuffer.mask]
+    item := self.ringBuffer.nodes[nextPos&self.ringBuffer.mask].data
     self.sequence.add(1)
     return item, nil
 }
@@ -138,7 +152,8 @@ func (self *Consumer) BatchGet() ([]interface{}, error) {
     items := make([]interface{}, batch)
 
     for i := int64(0); i < batch; i++ {
-        items[i] = self.ringBuffer.buffer[nextPos&self.ringBuffer.mask]
+        //items[i] = self.ringBuffer.buffer[nextPos&self.ringBuffer.mask]
+        items[i] = self.ringBuffer.nodes[nextPos&self.ringBuffer.mask].data
         nextPos++
     }
 

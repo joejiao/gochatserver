@@ -129,7 +129,7 @@ func (self *Room) readFromNATS() {
 }
 
 func (self *Room) writeToRingBuffer(msg *Message) {
-    self.ringBuffer.put(msg.Data)
+    self.ringBuffer.Put(msg.Data)
 }
 
 /*
