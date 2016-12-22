@@ -46,7 +46,7 @@ nohup gnatsd -m 1234 > /tmp/gnatsd.log 2>&1 &
 ```
 
 ## API
-服务器默认传输为TLS加密,连接代码如下:
+服务器默认传输为TLS加密，使用了之前没由于使用了自签名证书，需要设置client将不再对服务端的证书进行校验，连接代码如下:
 ```go
 conf := &tls.Config{
     InsecureSkipVerify: true,
