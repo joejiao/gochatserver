@@ -67,7 +67,7 @@ func (self *Client) handler() {
     go self.listen()
     go self.read()
     //go self.write()
-    go self.writeFromRingBuffer()
+    go self.getFromRingBuffer()
 }
 
 func (self *Client) listen() {
@@ -110,7 +110,6 @@ func (self *Client) join() {
 
 func (self *Client) read() {
     defer func() {
-
         // recover from panic caused by writing to a closed channel
         if r := recover(); r != nil {
             log.Printf("runtime panic client.read: %v\n", r)
@@ -144,7 +143,7 @@ func (self *Client) read() {
     }
 }
 
-func (self *Client) writeFromRingBuffer() {
+func (self *Client) getFromRingBuffer() {
     self.RLock()
     room := self.rooms[self.roomName]
     self.RUnlock()
@@ -179,7 +178,10 @@ func (self *Client) writeFromRingBuffer() {
                 continue
             }
             for _, v := range items {
-                isClosed = self.writeMsg(v.(string))
+                //isClosed = self.writeMsg(v.(string))
+                if self.writeMsg(v.(string)) == false {
+                    isClosed = true
+                }
             }
             self.writer.Flush()
         }
@@ -230,14 +232,16 @@ func (self *Client) writeMsg(msgData string) bool {
     //self.conn.SetWriteDeadline(time.Now().Add(1 * time.Second))
     _, err := self.writer.WriteString(msgData)
    // _, err := self.conn.Write([]byte(msgData))
+
+    //如果写失败，返回false
     if nerr, ok := err.(net.Error); ok && nerr.Temporary() {
-        return false
+        return true
     }
     if err != nil {
         //log.Printf("client.conn.Write error: %s\n", err)
-        return true
+        return false
     }
-    return false
+    return true
 }
 
 func (self *Client) auth() (m bool, err error) {
