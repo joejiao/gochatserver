@@ -122,8 +122,8 @@ func (self *ChatServer) ListenAndServe() {
     defer listener.Close()
 
     // use tls
-    cert, err := tls.LoadX509KeyPair("keys/server.pem", "keys/server.key")
-    //cert, err := tls.X509KeyPair([]byte(serverCert), []byte(serverKey))
+    //cert, err := tls.LoadX509KeyPair("keys/server.pem", "keys/server.key")
+    cert, err := tls.X509KeyPair([]byte(serverCert), []byte(serverKey))
     if err != nil {
         log.Fatal(err)
     }

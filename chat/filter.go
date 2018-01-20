@@ -51,7 +51,7 @@ func (self *BlackList) loadData() {
     name := self.FileName
     if IsFileExist(name) == false {
         self.Enable = false
-        log.Printf("Json File %s notfound, BlackList disable\n", name)
+        log.Printf("Json File %s not found, BlackList disable\n", name)
         return
     }
 
