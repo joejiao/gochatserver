@@ -2,19 +2,21 @@
 
 ## Project Overview
 
-This is a Go-based chat server using NATS message queue for distributed messaging. The codebase follows older Go conventions (GOPATH mode) with relative imports and vendor directory for dependencies.
+This is a Go-based chat server using NATS message queue for distributed messaging. The codebase uses Go Modules for dependency management.
 
 ## Build Commands
 
 ### Build the server
 ```bash
-# GOPATH mode (required due to relative imports)
-export GOPATH=/path/to/parent/GitLab
-export GO111MODULE=off
+# Go Modules mode
 go run chatserver.go -nats_url="nats://127.0.0.1:4222" -listen="0.0.0.0:9999" -filter_dir="./filter"
 
 # Or build binary
 go build -o chatserver chatserver.go
+
+# Download dependencies
+go mod download
+go mod tidy
 ```
 
 ### Run with flags
@@ -60,9 +62,9 @@ import (
     "sync"
     "time"
 
-    "github.com/nats-io/nats"
+    "github.com/nats-io/nats.go"
 
-    "./chat"
+    "gochatserver/chat"
 )
 ```
 
@@ -166,16 +168,17 @@ var (
 ```
 
 ### File and Package Structure
-- **Root**: `chatserver.go` (main entry point), `client.go`, `filter_api.go`
-- **chat/**: Core package with `server.go`, `room.go`, `client.go`, `ring.go`, `message.go`, `options.go`, `filter.go`, `public_func.go`
+- **Root**: `chatserver.go` (main entry point), `client.go`
+- **chat/**: Core package with `server.go`, `room.go`, `client.go`, `ring.go`, `message.go`, `options.go`, `filter.go`, `nats_pool.go`, `public_func.go`
 - **test/**: Test files using `_test.go` suffix
 - **tools/**: Utility programs and additional benchmarks
 - **filter/**: Blacklist JSON configuration directory
 
 ### Important Constraints
-- Project uses GOPATH mode with relative imports (`"./chat"`)
-- Does NOT use Go modules (set `GO111MODULE=off`)
-- Dependencies managed in `pkg/mod/` and `vendor/` directories
+- Project uses Go Modules with module path `gochatserver`
+- Dependencies stored in system cache `~/go/pkg/mod/` (not in project)
+- Uses standard imports: `gochatserver/chat` instead of `./chat`
+- NATS package: `github.com/nats-io/nats.go` (not `github.com/nats-io/nats`)
 - Mixed English and Chinese comments in the codebase
 - Preserves commented-out code blocks
 - Uses hardcoded password "pw" for authentication (should be configurable)
@@ -223,16 +226,16 @@ The server follows a producer-consumer pattern with:
 ## Environment Setup
 
 ```bash
-# Required environment variables (from .vscode/settings.json)
-export GOPATH="/Users/jiaoshengqiang/GitLab/gochatserver"
-export GO111MODULE="auto"
-export GOFLAGS="-mod=vendor"
+# Required environment variables
+export GOPATH="$HOME/go"           # Standard GOPATH
+export GO111MODULE="auto"           # Enable Go Modules
+# No GOFLAGS needed for Go Modules
 ```
 
 ## Development Notes
 
-- Codebase predates Go 1.11 modules
-- Uses older Go patterns (before modules became standard)
+- Project migrated to Go Modules (Go 1.11+)
+- Uses modern Go patterns with module path `gochatserver`
 - Heavy use of goroutines and channels
 - Embedded mutex pattern for thread safety
 - Ring buffer implementation based on LMAX Disruptor
