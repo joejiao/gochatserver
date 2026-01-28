@@ -1,0 +1,5 @@
+{
+    "go.gopath": "/Users/jiaoshengqiang/GitLab/gochatserver",
+	"GO111MODULE": "auto",
+	"GOFLAGS": "-mod=vendor"
+}

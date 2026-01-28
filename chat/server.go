@@ -1,11 +1,11 @@
 package chat
 
 import (
-    "log"
-    "net"
-    "sync"
-    "time"
-    "crypto/tls"
+	"crypto/tls"
+	"log"
+	"net"
+	"sync"
+	"time"
 )
 
 const serverKey = `-----BEGIN EC PARAMETERS-----
@@ -34,124 +34,140 @@ BAMCA0gAMEUCIEKzVMF3JqjQjuM2rX7Rx8hancI5KJhwfeKu1xbyR7XaAiEA2UT7
 `
 
 type ChatServer struct {
-    sync.RWMutex
-    rooms   map[string]*Room
-    opts    *Options
-    filter  *Filter
+	sync.RWMutex
+	rooms    map[string]*Room
+	opts     *Options
+	filter   *Filter
+	natsPool *NATSConnectionPool
 }
 
 func NewChatServer(opts *Options) *ChatServer {
-    rooms :=  make(map[string]*Room)
+	rooms := make(map[string]*Room)
+	natsPool := NewNATSConnectionPool(opts.NatsUrl, 3)
 
-    filter := NewFilter(opts)
-    filter.StartAndServe()
+	filter := NewFilter(opts)
+	filter.StartAndServe()
 
-    server := &ChatServer{rooms: rooms, opts: opts, filter: filter}
-    return server
+	server := &ChatServer{
+		rooms:    rooms,
+		opts:     opts,
+		filter:   filter,
+		natsPool: natsPool,
+	}
+	return server
+}
+
+func (self *ChatServer) GetNATSConnection() *NATSConnection {
+	return self.natsPool.GetConnection()
 }
 
 // GetRoom return a room, if this name of room is not exist,
 // create a new room and return.
 func (self *ChatServer) GetRoom(name string) *Room {
-    self.RLock()
-    _, ok := self.rooms[name]
-    self.RUnlock()
+	self.RLock()
+	_, ok := self.rooms[name]
+	self.RUnlock()
 
-    if !ok {
-        room := NewRoom(name, self)
+	if !ok {
+		room := NewRoom(name, self)
 
-        self.Lock()
-        self.rooms[name] = room
-        self.Unlock()
+		self.Lock()
+		self.rooms[name] = room
+		self.Unlock()
 
-        go room.listen()
-    }
+		go room.listen()
+	}
 
-    return self.rooms[name]
+	return self.rooms[name]
 }
 
 func (self *ChatServer) DelRoom(name string) {
-    self.Lock()
-    delete(self.rooms, name)
-    self.Unlock()
+	self.Lock()
+	delete(self.rooms, name)
+	self.Unlock()
 }
 
 // This method maybe should add a lock.
 func (self *ChatServer) reportStatus() {
-    ticker := time.NewTicker(time.Second * 10)
-    defer ticker.Stop()
+	ticker := time.NewTicker(time.Second * 10)
+	defer ticker.Stop()
 
-    for _ = range ticker.C {
-        self.RLock()
-        for _, room := range self.rooms {
-            rb := room.ringBuffer
-            pos := rb.producerSequence.get()
-            log.Printf("Status: %s: online %d, pos %d\n", room.name, len(room.clients), pos)
-        }
-        self.RUnlock()
-    }
+	for _ = range ticker.C {
+		self.RLock()
+		for _, room := range self.rooms {
+			rb := room.ringBuffer
+			pos := rb.producerSequence.get()
+			log.Printf("Status: %s: online %d, pos %d\n", room.name, len(room.clients), pos)
+		}
+		self.RUnlock()
+	}
 }
 
 func (self *ChatServer) cleanRoom() {
-    ticker := time.NewTicker(time.Second * 120)
-    defer ticker.Stop()
+	ticker := time.NewTicker(time.Second * 120)
+	defer ticker.Stop()
 
-    for _ = range ticker.C {
-        self.Lock()
-        for _, room := range self.rooms {
-            if len(room.clients) == 0 {
-                delete(self.rooms, room.name)
-                room.quit()
-            }
-        }
-        self.Unlock()
-    }
+	for _ = range ticker.C {
+		self.Lock()
+		for _, room := range self.rooms {
+			if len(room.clients) == 0 {
+				delete(self.rooms, room.name)
+				room.quit()
+			}
+		}
+		self.Unlock()
+	}
+}
+
+func (self *ChatServer) Close() {
+	log.Println("Shutting down ChatServer...")
+	self.natsPool.Close()
+	log.Println("ChatServer shutdown complete")
 }
 
 func (self *ChatServer) ListenAndServe() {
-    tcpAddr, err := net.ResolveTCPAddr("tcp", self.opts.Listen)
-    if err != nil {
-        log.Println("ResolveTCPAddr error: " + err.Error())
-        return
-    }
-    listener, err := net.ListenTCP("tcp", tcpAddr)
-    if err != nil {
-        log.Fatal("listenTCP error: " + err.Error())
-        return
-    }
-    defer listener.Close()
+	tcpAddr, err := net.ResolveTCPAddr("tcp", self.opts.Listen)
+	if err != nil {
+		log.Println("ResolveTCPAddr error: " + err.Error())
+		return
+	}
+	listener, err := net.ListenTCP("tcp", tcpAddr)
+	if err != nil {
+		log.Fatal("listenTCP error: " + err.Error())
+		return
+	}
+	defer listener.Close()
 
-    // use tls
-    //cert, err := tls.LoadX509KeyPair("keys/server.pem", "keys/server.key")
-    cert, err := tls.X509KeyPair([]byte(serverCert), []byte(serverKey))
-    if err != nil {
-        log.Fatal(err)
-    }
-    config := &tls.Config{Certificates: []tls.Certificate{cert}}
+	cert, err := tls.X509KeyPair([]byte(serverCert), []byte(serverKey))
+	if err != nil {
+		log.Fatal(err)
+	}
+	config := &tls.Config{Certificates: []tls.Certificate{cert}}
 
-    ln := tls.NewListener(listener, config)
-    defer ln.Close()
+	ln := tls.NewListener(listener, config)
+	defer ln.Close()
+	defer self.Close()
 
-    go self.reportStatus()
-    go self.cleanRoom()
+	go self.reportStatus()
+	go self.cleanRoom()
 
-    // Main loop
-    for {
-        conn, err := ln.Accept()
-        if err != nil {
-            log.Printf("Accept error: %s\n", err.Error())
-            continue
-        }
+	// Main loop
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Printf("Accept error: %s\n", err.Error())
+			continue
+		}
 
-        tcpConn, ok := conn.(*net.TCPConn)
-        if ok {
-            //tcpConn.SetLinger(0)
-            tcpConn.SetNoDelay(false)
-            tcpConn.SetKeepAlive(true)
-            tcpConn.SetKeepAlivePeriod(120 * time.Second)
-        }
+		tcpConn, ok := conn.(*net.TCPConn)
+		if ok {
+			//tcpConn.SetLinger(0)
+			tcpConn.SetNoDelay(false)
+			tcpConn.SetKeepAlive(true)
+			tcpConn.SetKeepAlivePeriod(120 * time.Second)
+		}
 
-        client := NewClient(conn, self)
-        go client.handler()
-    }
+		client := NewClient(conn, self)
+		go client.handler()
+	}
 }

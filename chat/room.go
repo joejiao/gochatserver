@@ -1,65 +1,62 @@
 package chat
 
 import (
-    "sync"
-    "net"
-    "log"
-//    "encoding/json"
-
-    "github.com/nats-io/nats"
+	"log"
+	"net"
+	"sync"
 )
 
 const (
-    ringBufferMaxSize = 512
+	ringBufferMaxSize = 512
 )
 
 type Room struct {
-    sync.RWMutex
-    name        string
-    clients     map[net.Conn]*Client
-    incoming    chan *Message
-    outgoing    chan *Message
-    quiting     chan struct{}
-    ringBuffer  *RingBuffer
-    server      *ChatServer
+	sync.RWMutex
+	name       string
+	clients    map[net.Conn]*Client
+	incoming   chan *Message
+	outgoing   chan *Message
+	quiting    chan struct{}
+	ringBuffer *RingBuffer
+	server     *ChatServer
 }
 
 func NewRoom(name string, server *ChatServer) *Room {
-    room := &Room{
-        name:       name,
-        clients:    make(map[net.Conn]*Client),
-        incoming:   make(chan *Message),
-        outgoing:   make(chan *Message, 1000),
-        quiting:    make(chan struct{}),
-        ringBuffer: NewRingBuffer(ringBufferMaxSize),
-        server:     server,
-    }
-    return room
+	room := &Room{
+		name:       name,
+		clients:    make(map[net.Conn]*Client),
+		incoming:   make(chan *Message),
+		outgoing:   make(chan *Message, 1000),
+		quiting:    make(chan struct{}),
+		ringBuffer: NewRingBuffer(ringBufferMaxSize),
+		server:     server,
+	}
+	return room
 }
 
 // 每一个room有一个goro负责路由
 func (self *Room) listen() {
-    go self.writeToNATS()
+	go self.writeToNATS()
 
-    go self.readFromNATS()
+	go self.readFromNATS()
 
-    for msg := range self.outgoing {
-        //log.Printf("Received: %+v\n", msg)
-        //self.broadcast(msgData)
-        self.writeToRingBuffer(msg)
-    }
+	for msg := range self.outgoing {
+		//log.Printf("Received: %+v\n", msg)
+		//self.broadcast(msgData)
+		self.writeToRingBuffer(msg)
+	}
 }
 
 func (self *Room) addClient(conn net.Conn, client *Client) {
-    self.Lock()
-    self.clients[conn] = client
-    self.Unlock()
+	self.Lock()
+	self.clients[conn] = client
+	self.Unlock()
 }
 func (self *Room) delClient(conn net.Conn) {
-    self.Lock()
-    delete(self.clients, conn)
-    self.Unlock()
-    //log.Printf("delete and close conn: %s\n", conn.RemoteAddr().String())
+	self.Lock()
+	delete(self.clients, conn)
+	self.Unlock()
+	//log.Printf("delete and close conn: %s\n", conn.RemoteAddr().String())
 }
 
 /*
@@ -86,50 +83,58 @@ func (self *Room) writeToFilterNATS() {
 */
 
 func (self *Room) writeToNATS() {
-    defer func() {
-        if r := recover(); r != nil {
-            log.Printf("runtime panic: room.writeToNATS: %s\n", r)
-        }
-    }()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("runtime panic: room.writeToNATS: %s\n", r)
+		}
+	}()
 
-    nc, _  := nats.Connect(self.server.opts.NatsUrl)
-    ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
-    if err != nil {
-        log.Fatal(err)
-    }
-    defer ec.Close()
+	poolConn := self.server.GetNATSConnection()
+	if poolConn == nil {
+		log.Printf("Failed to get NATS connection from pool for room %s\n", self.name)
+		return
+	}
 
-    for msg := range self.incoming {
-        //log.Printf("writeToNATS: %+v\n", msg)
-        ec.Publish(self.name, msg)
-    }
+	ec, err := poolConn.GetEncodedConn()
+	if err != nil {
+		log.Printf("Failed to get encoded connection: %v\n", err)
+		return
+	}
+	defer ec.Close()
+
+	for msg := range self.incoming {
+		ec.Publish(self.name, msg)
+	}
 }
 
 func (self *Room) readFromNATS() {
-    nc, _ := nats.Connect(self.server.opts.NatsUrl)
-    ec, err := nats.NewEncodedConn(nc, nats.JSON_ENCODER)
-    if err != nil {
-        log.Fatalf("nat.NewEncodedConn error: %v\n", err)
-    }
+	poolConn := self.server.GetNATSConnection()
+	if poolConn == nil {
+		log.Printf("Failed to get NATS connection from pool for room %s\n", self.name)
+		return
+	}
 
-    defer func() {
-        if r := recover(); r != nil {
-            log.Printf("readFromNATS runtime panic: %+v\n", r)
-        }
-        ec.Close()
-    }()
+	ec, err := poolConn.GetEncodedConn()
+	if err != nil {
+		log.Fatalf("nat.NewEncodedConn error: %v\n", err)
+	}
 
-    // 订阅主题, 当收到subject时候执行后面的func函数
-    ec.Subscribe(self.name, func(msg *Message) {
-        //log.Printf("readFromNATS: %+v\n", msg)
-        self.outgoing <- msg
-    })
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("readFromNATS runtime panic: %+v\n", r)
+		}
+		ec.Close()
+	}()
 
-    <-self.quiting
+	ec.Subscribe(self.name, func(msg *Message) {
+		self.outgoing <- msg
+	})
+
+	<-self.quiting
 }
 
 func (self *Room) writeToRingBuffer(msg *Message) {
-    self.ringBuffer.Put(msg.Data)
+	self.ringBuffer.Put(msg.Data)
 }
 
 /*
@@ -167,16 +172,16 @@ func (self *Room) broadcast(msgData string) {
 */
 
 func (self *Room) quit() {
-    defer func() {
-        if r := recover(); r != nil {
-            log.Printf("runtime panic: room.quit: %v\n", r)
-        }
-    }()
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("runtime panic: room.quit: %v\n", r)
+		}
+	}()
 
-    log.Printf("close room %s:%d\n", self.name, len(self.clients))
+	log.Printf("close room %s:%d\n", self.name, len(self.clients))
 
-    close(self.quiting)
-    close(self.incoming)
-    close(self.outgoing)
-    //self = nil
+	close(self.quiting)
+	close(self.incoming)
+	close(self.outgoing)
+	//self = nil
 }
