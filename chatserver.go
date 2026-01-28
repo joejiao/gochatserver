@@ -1,13 +1,14 @@
 package main
 
 import (
-	"./chat"
 	"flag"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"runtime"
 	"time"
+
+	"gochatserver/chat"
 )
 
 var (

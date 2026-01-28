@@ -29,6 +29,21 @@ cat ./filter/blacklist.json
 ```
 
 ## 运行
+
+### 构建
+
+项目已迁移至 Go Modules：
+
+```bash
+# 构建二进制文件
+go build -o chatserver chatserver.go
+
+# 或直接运行
+go run chatserver.go -nats_url="nats://127.0.0.1:4222" -listen="0.0.0.0:9999" -filter_dir="./filter"
+```
+
+### 启动
+
 - 启动MessageQueue集群
 
 ```bash

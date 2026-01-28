@@ -1,5 +1,8 @@
 {
-    "go.gopath": "/Users/jiaoshengqiang/GitLab/gochatserver",
-	"GO111MODULE": "auto",
-	"GOFLAGS": "-mod=vendor"
+    "go.gopath": "${HOME}/go",
+    "go.toolsManagement.autoUpdate": true,
+    "gopls": {
+        "ui.semanticTokens": true
+    }
 }
+

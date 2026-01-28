@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nats-io/nats"
+	"github.com/nats-io/nats.go"
 )
 
 // NATSConnection 包装 NATS 连接，增加健康状态管理
@@ -165,7 +165,7 @@ func (conn *NATSConnection) GetEncodedConn() (*nats.EncodedConn, error) {
 	defer conn.mu.Unlock()
 
 	if conn.encodedConn == nil || !conn.healthy {
-		return nil, nats.ErrBadConnection
+		return nil, nats.ErrConnectionClosed
 	}
 
 	return nats.NewEncodedConn(conn.encodedConn, nats.JSON_ENCODER)
