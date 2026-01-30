@@ -1,19 +1,19 @@
 package main
 
 import (
-	"github.com/apcera/nats"
+	"fmt"
 	"github.com/jaehue/anyq"
+	"github.com/nats-io/nats.go"
 	"io/ioutil"
 	"log"
 	"strconv"
 	"testing"
 	"time"
-    "fmt"
 )
 
 var (
-    testMsg = "hello world"
-    )
+	testMsg = "hello world"
+)
 
 func BenchmarkNatsProduce(b *testing.B) {
 	log.SetOutput(ioutil.Discard)
@@ -76,67 +76,67 @@ func BenchmarkNatsReply(b *testing.B) {
 */
 
 func produceBenchmark(b *testing.B, q anyq.Queuer, args interface{}) {
-    p, err := q.NewProducer(args)
-    if err != nil {
-        b.Error(err)
-    }
+	p, err := q.NewProducer(args)
+	if err != nil {
+		b.Error(err)
+	}
 
-    sendCh := make(chan []byte)
-    err = p.BindSendChan(sendCh)
-    if err != nil {
-        b.Error(err)
-    }
+	sendCh := make(chan []byte)
+	err = p.BindSendChan(sendCh)
+	if err != nil {
+		b.Error(err)
+	}
 
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        body := fmt.Sprintf("[%d]%s", i, testMsg)
-        sendCh <- []byte(body)
-    }
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		body := fmt.Sprintf("[%d]%s", i, testMsg)
+		sendCh <- []byte(body)
+	}
 }
 
 func pubsubBenchmark(b *testing.B, q anyq.Queuer, producerArgs interface{}, consumerArgs interface{}) {
-    // run producer
-    p, err := q.NewProducer(producerArgs)
-    if err != nil {
-        b.Error(err)
-    }
-    sendCh := make(chan []byte)
-    err = p.BindSendChan(sendCh)
-    if err != nil {
-        b.Error(err)
-    }
+	// run producer
+	p, err := q.NewProducer(producerArgs)
+	if err != nil {
+		b.Error(err)
+	}
+	sendCh := make(chan []byte)
+	err = p.BindSendChan(sendCh)
+	if err != nil {
+		b.Error(err)
+	}
 
-    quit := make(chan struct{})
-    go func() {
-        i := 0
-    produceloop:
-        for {
-            select {
-            case <-quit:
-                break produceloop
-            default:
-                body := fmt.Sprintf("[%d]%s", i, testMsg)
-                sendCh <- []byte(body)
-                i++
-            }
-        }
-        // b.Logf("produce count: %d", i)
-    }()
+	quit := make(chan struct{})
+	go func() {
+		i := 0
+	produceloop:
+		for {
+			select {
+			case <-quit:
+				break produceloop
+			default:
+				body := fmt.Sprintf("[%d]%s", i, testMsg)
+				sendCh <- []byte(body)
+				i++
+			}
+		}
+		// b.Logf("produce count: %d", i)
+	}()
 
-    // run consumer
-    c, err := q.NewConsumer(consumerArgs)
-    if err != nil {
-        b.Error(err)
-    }
-    recvCh := make(chan *anyq.Message)
-    err = c.BindRecvChan(recvCh)
-    if err != nil {
-        b.Error(err)
-    }
+	// run consumer
+	c, err := q.NewConsumer(consumerArgs)
+	if err != nil {
+		b.Error(err)
+	}
+	recvCh := make(chan *anyq.Message)
+	err = c.BindRecvChan(recvCh)
+	if err != nil {
+		b.Error(err)
+	}
 
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        <-recvCh
-    }
-    quit <- struct{}{}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		<-recvCh
+	}
+	quit <- struct{}{}
 }
