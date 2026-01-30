@@ -9,10 +9,10 @@ This is a Go-based chat server using NATS message queue for distributed messagin
 ### Build the server
 ```bash
 # Go Modules mode
-go run chatserver.go -nats_url="nats://127.0.0.1:4222" -listen="0.0.0.0:9999" -filter_dir="./filter"
+go run ./cmd/chatserver -nats_url="nats://127.0.0.1:4222" -listen="0.0.0.0:9999" -filter_dir="./filter"
 
 # Or build binary
-go build -o chatserver chatserver.go
+go build -o bin/chatserver ./cmd/chatserver
 
 # Download dependencies
 go mod download
@@ -21,7 +21,7 @@ go mod tidy
 
 ### Run with flags
 ```bash
-./chatserver \
+./bin/chatserver \
   -nats_url="nats://127.0.0.1:4222" \
   -listen="0.0.0.0:9999" \
   -filter_dir="./filter"
@@ -168,10 +168,12 @@ var (
 ```
 
 ### File and Package Structure
-- **Root**: `chatserver.go` (main entry point), `client.go`
+- **Root**: Project root with `go.mod`, `README.md`, `AGENTS.md`
+- **cmd/chatserver/**: Main server entry point (`main.go`)
+- **examples/**: Example programs and clients (e.g., stress test client)
 - **chat/**: Core package with `server.go`, `room.go`, `client.go`, `ring.go`, `message.go`, `options.go`, `filter.go`, `nats_pool.go`, `public_func.go`
-- **test/**: Test files using `_test.go` suffix
-- **tools/**: Utility programs and additional benchmarks
+- **test/benchmark/**: Performance benchmarks
+- **test/demo/**: Demo programs
 - **filter/**: Blacklist JSON configuration directory
 
 ### Important Constraints

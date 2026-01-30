@@ -28,18 +28,45 @@ cat ./filter/blacklist.json
 {"1":1, "2":1, "3":0, "4":3}
 ```
 
+## 项目结构
+
+```
+gochatserver/
+├── cmd/
+│   └── chatserver/     # 主服务器入口
+│       └── main.go
+├── chat/               # 核心包
+│   ├── server.go       # 服务器核心逻辑
+│   ├── room.go         # 聊天室管理
+│   ├── client.go       # 客户端连接管理
+│   ├── ring.go         # 环形缓冲区实现
+│   ├── nats_pool.go    # NATS 连接池
+│   ├── filter.go       # 消息过滤
+│   └── ...
+├── examples/           # 示例程序
+│   ├── client.go       # 压力测试客户端
+│   └── README.md
+├── test/
+│   ├── benchmark/      # 性能测试
+│   │   └── ring_benchmark_test.go
+│   └── demo/           # 演示程序
+│       └── ring_demo.go
+├── filter/             # 黑名单配置目录
+└── go.mod              # Go Modules 配置
+```
+
 ## 运行
 
 ### 构建
 
-项目已迁移至 Go Modules：
+项目使用 Go Modules 管理依赖：
 
 ```bash
-# 构建二进制文件
-go build -o chatserver chatserver.go
+# 构建主服务器
+go build -o bin/chatserver ./cmd/chatserver
 
 # 或直接运行
-go run chatserver.go -nats_url="nats://127.0.0.1:4222" -listen="0.0.0.0:9999" -filter_dir="./filter"
+go run ./cmd/chatserver -nats_url="nats://127.0.0.1:4222" -listen="0.0.0.0:9999" -filter_dir="./filter"
 ```
 
 ### 启动
@@ -57,7 +84,7 @@ nohup gnatsd -m 1234 > /tmp/gnatsd.log 2>&1 &
 - 启动聊天服务器
 
 ```bash
-./chatserver -filter_dir="./filter" -listen="0.0.0.0:9999" -nats_url="nats://127.0.0.1:4222"
+./bin/chatserver -filter_dir="./filter" -listen="0.0.0.0:9999" -nats_url="nats://127.0.0.1:4222"
 ```
 
 ## API

@@ -1,4 +1,5 @@
 # Binaries
+bin/
 chatserver
 *.exe
 *.exe~
@@ -13,6 +14,14 @@ chatserver
 
 # Output of the go coverage tool
 *.out
+
+# Examples binaries
+examples/client
+examples/*-test
+
+# Test outputs
+test/benchmark/*.test
+test/demo/*.test
 
 # Go workspace file
 go.work

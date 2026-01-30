@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
-    "strconv"
-    "../chat/"
+	"strconv"
+
+	"gochatserver/chat"
 )
 
 func main() {
-    var size int64 = 512
-    rb := chat.NewRingBuffer(size)
+	var size int64 = 512
+	rb := chat.NewRingBuffer(size)
 
-    for i := int64(0); i < size + 139; i++ {
+	for i := int64(0); i < size+139; i++ {
 		str := strconv.Itoa(int(i))
 		//fmt.Println(str)
 		rb.Put(str)
@@ -22,7 +23,7 @@ func main() {
 		str, err := c1.Get()
 		fmt.Println(i, str, err)
 	}
-    c2 := chat.NewConsumer(rb)
-    str, _ := c2.BatchGet()
-    fmt.Printf("%+v\n", str)
+	c2 := chat.NewConsumer(rb)
+	str, _ := c2.BatchGet()
+	fmt.Printf("%+v\n", str)
 }
