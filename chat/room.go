@@ -116,7 +116,8 @@ func (self *Room) readFromNATS() {
 
 	ec, err := poolConn.GetEncodedConn()
 	if err != nil {
-		log.Fatalf("nat.NewEncodedConn error: %v\n", err)
+		log.Printf("Failed to get encoded connection for room %s: %v\n", self.name, err)
+		return
 	}
 
 	defer func() {

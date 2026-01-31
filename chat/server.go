@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"crypto/tls"
 	"log"
 	"net"
@@ -8,7 +9,9 @@ import (
 	"time"
 )
 
-const serverKey = `-----BEGIN EC PARAMETERS-----
+const (
+	// Fallback self-signed certificate for development
+	defaultServerKey = `-----BEGIN EC PARAMETERS-----
 BggqhkjOPQMBBw==
 -----END EC PARAMETERS-----
 -----BEGIN EC PRIVATE KEY-----
@@ -18,7 +21,7 @@ cSqrxhPubawptX5MSr02ft32kfOlYbaF5Q==
 -----END EC PRIVATE KEY-----
 `
 
-const serverCert = `-----BEGIN CERTIFICATE-----
+	defaultServerCert = `-----BEGIN CERTIFICATE-----
 MIIB+TCCAZ+gAwIBAgIJAL05LKXo6PrrMAoGCCqGSM49BAMCMFkxCzAJBgNVBAYT
 AkFVMRMwEQYDVQQIDApTb21lLVN0YXRlMSEwHwYDVQQKDBhJbnRlcm5ldCBXaWRn
 aXRzIFB0eSBMdGQxEjAQBgNVBAMMCWxvY2FsaG9zdDAeFw0xNTEyMDgxNDAxMTNa
@@ -32,13 +35,17 @@ BAMCA0gAMEUCIEKzVMF3JqjQjuM2rX7Rx8hancI5KJhwfeKu1xbyR7XaAiEA2UT7
 1xOP035EcraRmWPe7tO0LpXgMxlh2VItpc2uc2w=
 -----END CERTIFICATE-----
 `
+)
 
 type ChatServer struct {
 	sync.RWMutex
-	rooms    map[string]*Room
-	opts     *Options
-	filter   *Filter
-	natsPool *NATSConnectionPool
+	ctx       context.Context
+	cancel    context.CancelFunc
+	wg        sync.WaitGroup
+	rooms     map[string]*Room
+	opts      *Options
+	filter    *Filter
+	natsPool  *NATSConnectionPool
 }
 
 func NewChatServer(opts *Options) *ChatServer {
@@ -48,7 +55,11 @@ func NewChatServer(opts *Options) *ChatServer {
 	filter := NewFilter(opts)
 	filter.StartAndServe()
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	server := &ChatServer{
+		ctx:      ctx,
+		cancel:   cancel,
 		rooms:    rooms,
 		opts:     opts,
 		filter:   filter,
@@ -65,20 +76,25 @@ func (self *ChatServer) GetNATSConnection() *NATSConnection {
 // create a new room and return.
 func (self *ChatServer) GetRoom(name string) *Room {
 	self.RLock()
-	_, ok := self.rooms[name]
+	room, ok := self.rooms[name]
 	self.RUnlock()
 
 	if !ok {
-		room := NewRoom(name, self)
-
 		self.Lock()
+		// Double-check: another goroutine might have created the room
+		if room, ok = self.rooms[name]; ok {
+			self.Unlock()
+			return room
+		}
+
+		room = NewRoom(name, self)
 		self.rooms[name] = room
 		self.Unlock()
 
 		go room.listen()
 	}
 
-	return self.rooms[name]
+	return room
 }
 
 func (self *ChatServer) DelRoom(name string) {
@@ -89,33 +105,49 @@ func (self *ChatServer) DelRoom(name string) {
 
 // This method maybe should add a lock.
 func (self *ChatServer) reportStatus() {
+	defer self.wg.Done()
+
 	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
 
-	for _ = range ticker.C {
-		self.RLock()
-		for _, room := range self.rooms {
-			rb := room.ringBuffer
-			pos := rb.producerSequence.get()
-			log.Printf("Status: %s: online %d, pos %d\n", room.name, len(room.clients), pos)
+	for {
+		select {
+		case <-self.ctx.Done():
+			log.Println("reportStatus stopped")
+			return
+		case <-ticker.C:
+			self.RLock()
+			for _, room := range self.rooms {
+				rb := room.ringBuffer
+				pos := rb.producerSequence.get()
+				log.Printf("Status: %s: online %d, pos %d\n", room.name, len(room.clients), pos)
+			}
+			self.RUnlock()
 		}
-		self.RUnlock()
 	}
 }
 
 func (self *ChatServer) cleanRoom() {
+	defer self.wg.Done()
+
 	ticker := time.NewTicker(time.Second * 120)
 	defer ticker.Stop()
 
-	for _ = range ticker.C {
-		self.Lock()
-		for _, room := range self.rooms {
-			if len(room.clients) == 0 {
-				delete(self.rooms, room.name)
-				room.quit()
+	for {
+		select {
+		case <-self.ctx.Done():
+			log.Println("cleanRoom stopped")
+			return
+		case <-ticker.C:
+			self.Lock()
+			for _, room := range self.rooms {
+				if len(room.clients) == 0 {
+					delete(self.rooms, room.name)
+					room.quit()
+				}
 			}
+			self.Unlock()
 		}
-		self.Unlock()
 	}
 }
 
@@ -123,6 +155,29 @@ func (self *ChatServer) Close() {
 	log.Println("Shutting down ChatServer...")
 	self.natsPool.Close()
 	log.Println("ChatServer shutdown complete")
+}
+
+// Shutdown gracefully shuts down the server
+func (self *ChatServer) Shutdown() {
+	log.Println("Starting graceful shutdown...")
+
+	// Cancel context to stop all goroutines
+	self.cancel()
+
+	// Wait for background goroutines to finish
+	self.wg.Wait()
+
+	// Close all rooms
+	self.Lock()
+	for _, room := range self.rooms {
+		room.quit()
+	}
+	self.rooms = make(map[string]*Room)
+	self.Unlock()
+
+	// Close NATS pool and filter
+	self.natsPool.Close()
+	log.Println("Graceful shutdown complete")
 }
 
 func (self *ChatServer) ListenAndServe() {
@@ -133,30 +188,57 @@ func (self *ChatServer) ListenAndServe() {
 	}
 	listener, err := net.ListenTCP("tcp", tcpAddr)
 	if err != nil {
-		log.Fatal("listenTCP error: " + err.Error())
+		log.Printf("Failed to listen on %s: %v", self.opts.Listen, err)
 		return
 	}
 	defer listener.Close()
 
-	cert, err := tls.X509KeyPair([]byte(serverCert), []byte(serverKey))
-	if err != nil {
-		log.Fatal(err)
+	var cert tls.Certificate
+	if self.opts.CertFile != "" && self.opts.KeyFile != "" {
+		// Load certificate from files
+		cert, err = tls.LoadX509KeyPair(self.opts.CertFile, self.opts.KeyFile)
+		if err != nil {
+			log.Printf("Failed to load TLS certificate from files: %v", err)
+			return
+		}
+		log.Printf("Loaded TLS certificate from %s and %s", self.opts.CertFile, self.opts.KeyFile)
+	} else {
+		// Use default self-signed certificate for development
+		cert, err = tls.X509KeyPair([]byte(defaultServerCert), []byte(defaultServerKey))
+		if err != nil {
+			log.Printf("Failed to load default TLS certificate: %v", err)
+			return
+		}
+		log.Println("Using default self-signed TLS certificate (for development only)")
 	}
 	config := &tls.Config{Certificates: []tls.Certificate{cert}}
 
 	ln := tls.NewListener(listener, config)
 	defer ln.Close()
-	defer self.Close()
 
+	// Start background goroutines with WaitGroup
+	self.wg.Add(2)
 	go self.reportStatus()
 	go self.cleanRoom()
 
 	// Main loop
+	go func() {
+		<-self.ctx.Done()
+		ln.Close()
+	}()
+
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Printf("Accept error: %s\n", err.Error())
-			continue
+			// Check if this is due to shutdown
+			select {
+			case <-self.ctx.Done():
+				log.Println("Listener closed due to shutdown")
+				return
+			default:
+				log.Printf("Accept error: %s\n", err.Error())
+				continue
+			}
 		}
 
 		tcpConn, ok := conn.(*net.TCPConn)

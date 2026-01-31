@@ -12,9 +12,6 @@ import (
 	"time"
 )
 
-var (
-	passwd = "pw"
-)
 
 type Client struct {
 	sync.RWMutex
@@ -254,7 +251,7 @@ func (self *Client) auth() (m bool, err error) {
 	}
 	line = strings.TrimRight(line, "\n")
 
-	re := "^auth " + passwd + "$"
+	re := "^auth " + self.server.opts.AuthPassword + "$"
 	m, err = regexp.MatchString(re, line)
 	return
 }
