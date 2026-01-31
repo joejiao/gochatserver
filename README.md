@@ -66,7 +66,11 @@ gochatserver/
 go build -o bin/chatserver ./cmd/chatserver
 
 # 或直接运行
-go run ./cmd/chatserver -nats_url="nats://127.0.0.1:4222" -listen="0.0.0.0:9999" -filter_dir="./filter"
+go run ./cmd/chatserver \
+  -nats_url="nats://127.0.0.1:4222" \
+  -listen="0.0.0.0:9999" \
+  -filter_dir="./filter" \
+  -auth_password="your-password"
 ```
 
 ### 启动
@@ -84,11 +88,39 @@ nohup gnatsd -m 1234 > /tmp/gnatsd.log 2>&1 &
 - 启动聊天服务器
 
 ```bash
-./bin/chatserver -filter_dir="./filter" -listen="0.0.0.0:9999" -nats_url="nats://127.0.0.1:4222"
+# 使用默认配置（内置自签名证书，默认密码 "pw"）
+./bin/chatserver \
+  -filter_dir="./filter" \
+  -listen="0.0.0.0:9999" \
+  -nats_url="nats://127.0.0.1:4222"
+
+# 使用自定义密码和 TLS 证书
+./bin/chatserver \
+  -filter_dir="./filter" \
+  -listen="0.0.0.0:9999" \
+  -nats_url="nats://127.0.0.1:4222" \
+  -auth_password="secure-password" \
+  -cert_file="/path/to/cert.pem" \
+  -key_file="/path/to/key.pem"
 ```
 
+**启动参数说明：**
+- `-nats_url`: NATS 服务器地址（默认: `nats://10.1.64.2:4222`）
+- `-listen`: 监听地址（默认: `0.0.0.0:9999`）
+- `-filter_dir`: 黑名单配置目录（默认: `./filter`）
+- `-auth_password`: 客户端认证密码（默认: `pw`）
+- `-cert_file`: TLS 证书文件路径（留空使用内置自签名证书）
+- `-key_file`: TLS 私钥文件路径（留空使用内置自签名证书）
+
 ## API
-服务器默认传输为TLS加密，由于使用了自签名证书，需要设置client将不再对服务端的证书进行校验，连接代码如下:
+
+### 服务器说明
+- 服务器默认使用 TLS 加密传输
+- 内置自签名证书用于开发环境（生产环境请使用 `-cert_file` 和 `-key_file` 指定正式证书）
+- 支持优雅关闭（`Ctrl+C` 或 `SIGTERM` 信号）
+
+### 客户端连接
+由于默认使用自签名证书，客户端需要设置跳过证书校验：
 ```go
 conf := &tls.Config{
     InsecureSkipVerify: true,
@@ -97,10 +129,23 @@ conf := &tls.Config{
 conn, err := tls.Dial("tcp", *hostAndPort, conf)
 ```
 
-客户端连接方法：
+**Go 客户端示例：**
+```go
+conf := &tls.Config{
+    InsecureSkipVerify: true,  // 开发环境跳过证书验证
+}
+
+conn, err := tls.Dial("tcp", "127.0.0.1:9999", conf)
+```
+
+**命令行连接：**
 ```bash
 ncat --ssl 127.0.0.1 9999
-auth password
-uid 1111
-join roomId
+```
+
+**连接协议：**
+```bash
+auth <password>      # 认证，默认密码 "pw"
+uid <user_id>        # 设置用户 ID
+join <room_id>       # 加入房间
 ```
